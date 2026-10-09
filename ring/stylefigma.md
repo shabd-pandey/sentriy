@@ -1,0 +1,8 @@
+C:\Users\User\genrun\style\Movie Booking Interface (3).make this is my main user interface style my website should totally look like this 
+in ticket  nav bar of my main website thier will be a game says play and earn rewards on that section when any one player click on that game C:\Users\User\genrun\style\Music Festival Landing Page.make this game should apper this is the degine and working game that i have made.
+also every player can only play this game three times and then after that  he or she get thier reward i will add these reward and thiese are the specific fod coupon promo code of dwrpar.com which is added by admin manually also they can also get other movie premiur free or get 50 percent off
+if it get some thislike next free ticket or next 30 percent off aor 50 %off he or she will get automatic that percent to off in next purchase preapplied 
+also C:\Users\User\genrun\style\User Profile Page.make use this to create my admin page and also the card shown in this make it sharable with releven watched and streak data with random qr to with no use thier give admin option to put  link based on that link every profile has same qr code also in propile nav bar below that thier be all the important settingbtht a webside should have be show 
+also check all the desgin principle and update the md files with the refenecence i given and make 
+also the website name is marvelsyllabus
+and the tag line is burden with glorious syllabus

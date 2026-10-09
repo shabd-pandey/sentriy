@@ -1,0 +1,1739 @@
+{
+  "target": {
+    "title": "Avengers: Doomsday",
+    "release_date": "2026-12-18",
+    "directors": "Anthony Russo, Joe Russo",
+    "villain": "Doctor Doom (Robert Downey Jr.)",
+    "notes": "Compiled 2026-10-07 from public watch-guides and the confirmed cast. The cast is not final. Series entries (Loki, WandaVision, FATWS) are included because the story depends on them."
+  },
+  "tiers": {
+    "essential": "Skipping these leaves real plot gaps",
+    "recommended": "Adds character context",
+    "optional": "Background/fan-service"
+  },
+  "image_notes": "Artwork was retrieved from TMDB into this local collection; review licensing before public deployment.",
+  "count": 61,
+  "movies": [
+    {
+      "id": "captain-america-the-first-avenger",
+      "title": "Captain America: The First Avenger",
+      "type": "film",
+      "release_year": 2011,
+      "directors": "Joe Johnston",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 1,
+      "description": "Steve Rogers becomes Captain America in WWII and meets Peggy Carter.",
+      "doomsday_connection": "Origin of Steve Rogers and Peggy Carter, both in Doomsday.",
+      "doomsday_confirmed_characters": [
+        "Steve Rogers",
+        "Peggy Carter"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/captain-america-the-first-avenger.jpg",
+        "banner_url": "/data/streak-collection/banners/captain-america-the-first-avenger.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Captain America: The First Avenger",
+        "year": 2011,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "iron-man",
+      "title": "Iron Man",
+      "type": "film",
+      "release_year": 2008,
+      "directors": "Jon Favreau",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 2,
+      "description": "Tony Stark builds the Iron Man suit and begins the MCU.",
+      "doomsday_connection": "Robert Downey Jr.'s MCU start; he returns as Doom in Doomsday.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/iron-man.jpg",
+        "banner_url": "/data/streak-collection/banners/iron-man.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Iron Man",
+        "year": 2008,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "iron-man-2",
+      "title": "Iron Man 2",
+      "type": "film",
+      "release_year": 2010,
+      "directors": "Jon Favreau",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 3,
+      "description": "Tony faces Whiplash while S.H.I.E.L.D. watches him.",
+      "doomsday_connection": "Introduces War Machine and Black Widow.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/iron-man-2.jpg",
+        "banner_url": "/data/streak-collection/banners/iron-man-2.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Iron Man 2",
+        "year": 2010,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "thor",
+      "title": "Thor",
+      "type": "film",
+      "release_year": 2011,
+      "directors": "Kenneth Branagh",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 4,
+      "description": "Thor is banished to Earth and Loki schemes for the throne.",
+      "doomsday_connection": "Origin of Thor and Loki, both in Doomsday.",
+      "doomsday_confirmed_characters": [
+        "Thor",
+        "Loki"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/thor.jpg",
+        "banner_url": "/data/streak-collection/banners/thor.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Thor",
+        "year": 2011,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "the-avengers",
+      "title": "The Avengers",
+      "type": "film",
+      "release_year": 2012,
+      "directors": "Joss Whedon",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 5,
+      "description": "Earth's heroes unite to stop Loki's invasion.",
+      "doomsday_connection": "The original team-up template.",
+      "doomsday_confirmed_characters": [
+        "Thor",
+        "Loki"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/the-avengers.jpg",
+        "banner_url": "/data/streak-collection/banners/the-avengers.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "The Avengers",
+        "year": 2012,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "iron-man-3",
+      "title": "Iron Man 3",
+      "type": "film",
+      "release_year": 2013,
+      "directors": "Shane Black",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 6,
+      "description": "Tony battles the Mandarin and Extremis while dealing with PTSD.",
+      "doomsday_connection": "Background on Tony Stark.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/iron-man-3.jpg",
+        "banner_url": "/data/streak-collection/banners/iron-man-3.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Iron Man 3",
+        "year": 2013,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "thor-the-dark-world",
+      "title": "Thor: The Dark World",
+      "type": "film",
+      "release_year": 2013,
+      "directors": "Alan Taylor",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 7,
+      "description": "Thor faces the Dark Elves and the Aether.",
+      "doomsday_connection": "Loki's arc and the Reality Stone.",
+      "doomsday_confirmed_characters": [
+        "Thor",
+        "Loki"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/thor-the-dark-world.jpg",
+        "banner_url": "/data/streak-collection/banners/thor-the-dark-world.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Thor: The Dark World",
+        "year": 2013,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "captain-america-the-winter-soldier",
+      "title": "Captain America: The Winter Soldier",
+      "type": "film",
+      "release_year": 2014,
+      "directors": "Anthony Russo, Joe Russo",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "recommended",
+      "suggested_watch_order": 8,
+      "description": "Steve Rogers uncovers HYDRA inside S.H.I.E.L.D. and faces Bucky as the Winter Soldier.",
+      "doomsday_connection": "Introduces Sam Wilson as an ally and Bucky's return.",
+      "doomsday_confirmed_characters": [
+        "Bucky Barnes",
+        "Sam Wilson",
+        "Steve Rogers"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/captain-america-the-winter-soldier.jpg",
+        "banner_url": "/data/streak-collection/banners/captain-america-the-winter-soldier.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Captain America: The Winter Soldier",
+        "year": 2014,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "guardians-of-the-galaxy",
+      "title": "Guardians of the Galaxy",
+      "type": "film",
+      "release_year": 2014,
+      "directors": "James Gunn",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 9,
+      "description": "A group of outlaws unites to stop Ronan.",
+      "doomsday_connection": "Cosmic background. No confirmed Doomsday cast.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/guardians-of-the-galaxy.jpg",
+        "banner_url": "/data/streak-collection/banners/guardians-of-the-galaxy.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Guardians of the Galaxy",
+        "year": 2014,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "guardians-of-the-galaxy-vol-2",
+      "title": "Guardians of the Galaxy Vol. 2",
+      "type": "film",
+      "release_year": 2017,
+      "directors": "James Gunn",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 10,
+      "description": "Peter Quill meets his father Ego.",
+      "doomsday_connection": "Cosmic background. No confirmed Doomsday cast.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/guardians-of-the-galaxy-vol-2.jpg",
+        "banner_url": "/data/streak-collection/banners/guardians-of-the-galaxy-vol-2.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Guardians of the Galaxy Vol. 2",
+        "year": 2017,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "avengers-age-of-ultron",
+      "title": "Avengers: Age of Ultron",
+      "type": "film",
+      "release_year": 2015,
+      "directors": "Joss Whedon",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 11,
+      "description": "Tony Stark and Bruce Banner create Ultron, and the Avengers face the consequences.",
+      "doomsday_connection": "Introduces Vision and the Avengers' fracture.",
+      "doomsday_confirmed_characters": [
+        "Thor",
+        "Steve Rogers"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/avengers-age-of-ultron.jpg",
+        "banner_url": "/data/streak-collection/banners/avengers-age-of-ultron.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Avengers: Age of Ultron",
+        "year": 2015,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "ant-man",
+      "title": "Ant-Man",
+      "type": "film",
+      "release_year": 2015,
+      "directors": "Peyton Reed",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 12,
+      "description": "Scott Lang becomes Ant-Man and introduces the Quantum Realm.",
+      "doomsday_connection": "Origin of Scott Lang, in Doomsday.",
+      "doomsday_confirmed_characters": [
+        "Scott Lang / Ant-Man"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/ant-man.jpg",
+        "banner_url": "/data/streak-collection/banners/ant-man.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Ant-Man",
+        "year": 2015,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "captain-america-civil-war",
+      "title": "Captain America: Civil War",
+      "type": "film",
+      "release_year": 2016,
+      "directors": "Anthony Russo, Joe Russo",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "recommended",
+      "suggested_watch_order": 13,
+      "description": "The Avengers split over the Sokovia Accords.",
+      "doomsday_connection": "Bucky, Sam, Steve and Scott are all in Doomsday; Black Panther and Spider-Man debut.",
+      "doomsday_confirmed_characters": [
+        "Steve Rogers",
+        "Bucky Barnes",
+        "Sam Wilson",
+        "Scott Lang / Ant-Man"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/captain-america-civil-war.jpg",
+        "banner_url": "/data/streak-collection/banners/captain-america-civil-war.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Captain America: Civil War",
+        "year": 2016,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": true
+    },
+    {
+      "id": "black-widow",
+      "title": "Black Widow",
+      "type": "film",
+      "release_year": 2021,
+      "directors": "Cate Shortland",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "recommended",
+      "suggested_watch_order": 14,
+      "description": "Natasha Romanoff confronts her past and the Red Room, reuniting with Yelena and Alexei.",
+      "doomsday_connection": "Introduces Yelena Belova and Red Guardian, both in Doomsday.",
+      "doomsday_confirmed_characters": [
+        "Yelena Belova",
+        "Red Guardian"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/black-widow.jpg",
+        "banner_url": "/data/streak-collection/banners/black-widow.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Black Widow",
+        "year": 2021,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "black-panther",
+      "title": "Black Panther",
+      "type": "film",
+      "release_year": 2018,
+      "directors": "Ryan Coogler",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "recommended",
+      "suggested_watch_order": 15,
+      "description": "T'Challa becomes king of Wakanda and faces Killmonger.",
+      "doomsday_connection": "Introduces Shuri and M'Baku.",
+      "doomsday_confirmed_characters": [
+        "Shuri",
+        "M'Baku"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/black-panther.jpg",
+        "banner_url": "/data/streak-collection/banners/black-panther.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Black Panther",
+        "year": 2018,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "spider-man-homecoming",
+      "title": "Spider-Man: Homecoming",
+      "type": "film",
+      "release_year": 2017,
+      "directors": "Jon Watts",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 16,
+      "description": "Peter Parker (Tom Holland), mentored by Tony Stark, tries to prove himself as a hero while chasing Adrian Toomes, the Vulture, and keeping up with high school.",
+      "doomsday_connection": "Peter's MCU origin.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/spider-man-homecoming.jpg",
+        "banner_url": "/data/streak-collection/banners/spider-man-homecoming.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Spider-Man: Homecoming",
+        "year": 2017,
+        "media_type": "movie"
+      },
+      "franchise": "Spider-Man (MCU, Tom Holland)",
+      "holland_cameo": false
+    },
+    {
+      "id": "doctor-strange",
+      "title": "Doctor Strange",
+      "type": "film",
+      "release_year": 2016,
+      "directors": "Scott Derrickson",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 17,
+      "description": "Stephen Strange becomes a sorcerer and learns the mystic arts.",
+      "doomsday_connection": "Origin of Doctor Strange.",
+      "doomsday_confirmed_characters": [
+        "Doctor Strange (reported)"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/doctor-strange.jpg",
+        "banner_url": "/data/streak-collection/banners/doctor-strange.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Doctor Strange",
+        "year": 2016,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "thor-ragnarok",
+      "title": "Thor: Ragnarok",
+      "type": "film",
+      "release_year": 2017,
+      "directors": "Taika Waititi",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "recommended",
+      "suggested_watch_order": 18,
+      "description": "Thor faces Hela and the destruction of Asgard.",
+      "doomsday_connection": "Thor's arc into Infinity War.",
+      "doomsday_confirmed_characters": [
+        "Thor",
+        "Loki"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/thor-ragnarok.jpg",
+        "banner_url": "/data/streak-collection/banners/thor-ragnarok.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Thor: Ragnarok",
+        "year": 2017,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "ant-man-and-the-wasp",
+      "title": "Ant-Man and the Wasp",
+      "type": "film",
+      "release_year": 2018,
+      "directors": "Peyton Reed",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 19,
+      "description": "Scott, Hope and Hank search for Janet in the Quantum Realm and face Ghost.",
+      "doomsday_connection": "Introduces Ghost, confirmed for Doomsday.",
+      "doomsday_confirmed_characters": [
+        "Ghost",
+        "Scott Lang / Ant-Man"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/ant-man-and-the-wasp.jpg",
+        "banner_url": "/data/streak-collection/banners/ant-man-and-the-wasp.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Ant-Man and the Wasp",
+        "year": 2018,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "avengers-infinity-war",
+      "title": "Avengers: Infinity War",
+      "type": "film",
+      "release_year": 2018,
+      "directors": "Anthony Russo, Joe Russo",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "recommended",
+      "suggested_watch_order": 20,
+      "description": "Thanos collects the Infinity Stones and snaps away half of all life.",
+      "doomsday_connection": "Needed context for Endgame.",
+      "doomsday_confirmed_characters": [
+        "Thor"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/avengers-infinity-war.jpg",
+        "banner_url": "/data/streak-collection/banners/avengers-infinity-war.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Avengers: Infinity War",
+        "year": 2018,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": true
+    },
+    {
+      "id": "captain-marvel",
+      "title": "Captain Marvel",
+      "type": "film",
+      "release_year": 2019,
+      "directors": "Anna Boden, Ryan Fleck",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 21,
+      "description": "Carol Danvers becomes Captain Marvel in the 1990s.",
+      "doomsday_connection": "No confirmed Doomsday cast.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/captain-marvel.jpg",
+        "banner_url": "/data/streak-collection/banners/captain-marvel.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Captain Marvel",
+        "year": 2019,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "avengers-endgame",
+      "title": "Avengers: Endgame",
+      "type": "film",
+      "release_year": 2019,
+      "directors": "Anthony Russo, Joe Russo",
+      "universe": "MCU",
+      "layer": 1,
+      "layer_label": "Directly connected to Doomsday",
+      "tier": "essential",
+      "suggested_watch_order": 22,
+      "description": "Five years after Thanos snaps half of all life away, the surviving Avengers pull off a time heist to undo it. Tony Stark dies, and Steve Rogers stays in the past with Peggy Carter.",
+      "doomsday_connection": "The emotional and narrative baseline of Doomsday. Steve Rogers' ending is where his return picks up.",
+      "doomsday_confirmed_characters": [
+        "Steve Rogers",
+        "Thor",
+        "Scott Lang / Ant-Man",
+        "Peggy Carter",
+        "Bucky Barnes"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/avengers-endgame.jpg",
+        "banner_url": "/data/streak-collection/banners/avengers-endgame.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Avengers: Endgame",
+        "year": 2019,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": true
+    },
+    {
+      "id": "wandavision",
+      "title": "WandaVision",
+      "type": "series",
+      "release_year": 2021,
+      "creators": "Jac Schaeffer (head writer)",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "recommended",
+      "suggested_watch_order": 23,
+      "description": "Wanda Maximoff's grief traps a town in a sitcom reality and she becomes the Scarlet Witch.",
+      "doomsday_connection": "Foundation for Multiverse of Madness.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/wandavision.jpg",
+        "banner_url": "/data/streak-collection/banners/wandavision.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "WandaVision",
+        "year": 2021,
+        "media_type": "tv"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "the-falcon-and-the-winter-soldier",
+      "title": "The Falcon and the Winter Soldier",
+      "type": "series",
+      "release_year": 2021,
+      "creators": "Malcolm Spellman (creator)",
+      "universe": "MCU",
+      "layer": 2,
+      "layer_label": "Feeds a direct setup film",
+      "tier": "recommended",
+      "suggested_watch_order": 24,
+      "description": "Sam Wilson and Bucky Barnes deal with Steve Rogers' legacy as Sam decides whether to accept the shield.",
+      "doomsday_connection": "Explains how Sam became Captain America and introduces John Walker and Joaquin Torres.",
+      "doomsday_confirmed_characters": [
+        "Sam Wilson",
+        "Bucky Barnes",
+        "John Walker",
+        "Joaquin Torres"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/the-falcon-and-the-winter-soldier.jpg",
+        "banner_url": "/data/streak-collection/banners/the-falcon-and-the-winter-soldier.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "The Falcon and the Winter Soldier",
+        "year": 2021,
+        "media_type": "tv"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "loki-season-1",
+      "title": "Loki (Season 1)",
+      "type": "series",
+      "release_year": 2021,
+      "creators": "Michael Waldron (creator)",
+      "universe": "MCU",
+      "layer": 1,
+      "layer_label": "Directly connected to Doomsday",
+      "tier": "essential",
+      "suggested_watch_order": 25,
+      "description": "A variant of Loki is pulled into the Time Variance Authority, which exists to protect a single Sacred Timeline. The season ends with the killing of He Who Remains, a Kang variant.",
+      "doomsday_connection": "Explains how the multiverse was set loose and why variants of characters (including a Doom variant) can exist.",
+      "doomsday_confirmed_characters": [
+        "Loki"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/loki-season-1.jpg",
+        "banner_url": "/data/streak-collection/banners/loki-season-1.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Loki",
+        "year": 2021,
+        "media_type": "tv"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "spider-man-far-from-home",
+      "title": "Spider-Man: Far From Home",
+      "type": "film",
+      "release_year": 2019,
+      "directors": "Jon Watts",
+      "universe": "MCU",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 26,
+      "description": "On a school trip to Europe, Peter is recruited by Nick Fury to face the Elementals with Mysterio, whose true plan ends with Peter's identity exposed.",
+      "doomsday_connection": "Leads directly into No Way Home.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/spider-man-far-from-home.jpg",
+        "banner_url": "/data/streak-collection/banners/spider-man-far-from-home.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Spider-Man: Far From Home",
+        "year": 2019,
+        "media_type": "movie"
+      },
+      "franchise": "Spider-Man (MCU, Tom Holland)",
+      "holland_cameo": false
+    },
+    {
+      "id": "shang-chi-and-the-legend-of-the-ten-rings",
+      "title": "Shang-Chi and the Legend of the Ten Rings",
+      "type": "film",
+      "release_year": 2021,
+      "directors": "Destin Daniel Cretton",
+      "universe": "MCU",
+      "layer": 2,
+      "layer_label": "Feeds a direct setup film",
+      "tier": "recommended",
+      "suggested_watch_order": 27,
+      "description": "Shang-Chi confronts his father and the Ten Rings organization and takes on the Ten Rings himself.",
+      "doomsday_connection": "Shang-Chi is confirmed for Doomsday and the beacon at the end of his film has not been resolved.",
+      "doomsday_confirmed_characters": [
+        "Shang-Chi"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/shang-chi-and-the-legend-of-the-ten-rings.jpg",
+        "banner_url": "/data/streak-collection/banners/shang-chi-and-the-legend-of-the-ten-rings.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Shang-Chi and the Legend of the Ten Rings",
+        "year": 2021,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "spider-man-2002",
+      "title": "Spider-Man",
+      "type": "film",
+      "release_year": 2002,
+      "directors": "Sam Raimi",
+      "universe": "Sony Spider-Man (Raimi)",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 28,
+      "description": "Bitten by a genetically engineered spider, Peter Parker (Tobey Maguire) gains powers, loses Uncle Ben, and becomes Spider-Man while Norman Osborn turns into the Green Goblin.",
+      "doomsday_connection": "Tobey Maguire's Spider-Man returns in No Way Home.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/spider-man-2002.jpg",
+        "banner_url": "/data/streak-collection/banners/spider-man-2002.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Spider-Man",
+        "year": 2002,
+        "media_type": "movie"
+      },
+      "franchise": "Spider-Man (Sam Raimi, Tobey Maguire)",
+      "holland_cameo": false
+    },
+    {
+      "id": "spider-man-2",
+      "title": "Spider-Man 2",
+      "type": "film",
+      "release_year": 2004,
+      "directors": "Sam Raimi",
+      "universe": "Sony Spider-Man (Raimi)",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 29,
+      "description": "Peter's double life wears him down as he quits being Spider-Man, then returns to stop Dr. Otto Octavius, whose fusion experiment turns him into Doctor Octopus.",
+      "doomsday_connection": "Doc Ock returns in No Way Home.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/spider-man-2.jpg",
+        "banner_url": "/data/streak-collection/banners/spider-man-2.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Spider-Man 2",
+        "year": 2004,
+        "media_type": "movie"
+      },
+      "franchise": "Spider-Man (Sam Raimi, Tobey Maguire)",
+      "holland_cameo": false
+    },
+    {
+      "id": "spider-man-3",
+      "title": "Spider-Man 3",
+      "type": "film",
+      "release_year": 2007,
+      "directors": "Sam Raimi",
+      "universe": "Sony Spider-Man (Raimi)",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 30,
+      "description": "Peter's life is complicated by the alien symbiote suit, Harry's revenge as the New Goblin, and the Sandman, whose connection to Uncle Ben's death is revealed.",
+      "doomsday_connection": "Sandman returns in No Way Home.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/spider-man-3.jpg",
+        "banner_url": "/data/streak-collection/banners/spider-man-3.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Spider-Man 3",
+        "year": 2007,
+        "media_type": "movie"
+      },
+      "franchise": "Spider-Man (Sam Raimi, Tobey Maguire)",
+      "holland_cameo": false
+    },
+    {
+      "id": "the-amazing-spider-man",
+      "title": "The Amazing Spider-Man",
+      "type": "film",
+      "release_year": 2012,
+      "directors": "Marc Webb",
+      "universe": "Sony Spider-Man (Webb)",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 31,
+      "description": "A reboot: Peter Parker (Andrew Garfield) learns about his parents' past, gets his powers, and falls for Gwen Stacy while facing Dr. Curt Connors as the Lizard.",
+      "doomsday_connection": "Andrew Garfield's Spider-Man returns in No Way Home.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/the-amazing-spider-man.jpg",
+        "banner_url": "/data/streak-collection/banners/the-amazing-spider-man.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "The Amazing Spider-Man",
+        "year": 2012,
+        "media_type": "movie"
+      },
+      "franchise": "The Amazing Spider-Man (Marc Webb, Andrew Garfield)",
+      "holland_cameo": false
+    },
+    {
+      "id": "the-amazing-spider-man-2",
+      "title": "The Amazing Spider-Man 2",
+      "type": "film",
+      "release_year": 2014,
+      "directors": "Marc Webb",
+      "universe": "Sony Spider-Man (Webb)",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 32,
+      "description": "Peter's relationship with Gwen Stacy and the truth about his parents collide with Electro and Harry Osborn's Green Goblin, ending in tragedy.",
+      "doomsday_connection": "Electro returns in No Way Home.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/the-amazing-spider-man-2.jpg",
+        "banner_url": "/data/streak-collection/banners/the-amazing-spider-man-2.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "The Amazing Spider-Man 2",
+        "year": 2014,
+        "media_type": "movie"
+      },
+      "franchise": "The Amazing Spider-Man (Marc Webb, Andrew Garfield)",
+      "holland_cameo": false
+    },
+    {
+      "id": "spider-man-no-way-home",
+      "title": "Spider-Man: No Way Home",
+      "type": "film",
+      "release_year": 2021,
+      "directors": "Jon Watts",
+      "universe": "MCU",
+      "layer": 1,
+      "layer_label": "Directly connected to Doomsday",
+      "tier": "essential",
+      "suggested_watch_order": 33,
+      "description": "After Mysterio exposes him, Peter asks Doctor Strange to make the world forget; the spell tears open the multiverse, and Spider-Men and villains from other universes arrive.",
+      "doomsday_connection": "Opens the multiverse on screen and shows other universes' characters crossing into the MCU.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/spider-man-no-way-home.jpg",
+        "banner_url": "/data/streak-collection/banners/spider-man-no-way-home.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Spider-Man: No Way Home",
+        "year": 2021,
+        "media_type": "movie"
+      },
+      "franchise": "Spider-Man (MCU, Tom Holland)",
+      "holland_cameo": false
+    },
+    {
+      "id": "doctor-strange-multiverse-of-madness",
+      "title": "Doctor Strange in the Multiverse of Madness",
+      "type": "film",
+      "release_year": 2022,
+      "directors": "Sam Raimi",
+      "universe": "MCU",
+      "layer": 1,
+      "layer_label": "Directly connected to Doomsday",
+      "tier": "essential",
+      "suggested_watch_order": 34,
+      "description": "Doctor Strange travels across universes to protect America Chavez from Wanda Maximoff, who is hunting for her children.",
+      "doomsday_connection": "Introduces incursions, the collision of two universes that can destroy both, the central multiverse threat.",
+      "doomsday_confirmed_characters": [
+        "Doctor Strange (reported)"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/doctor-strange-multiverse-of-madness.jpg",
+        "banner_url": "/data/streak-collection/banners/doctor-strange-multiverse-of-madness.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Doctor Strange in the Multiverse of Madness",
+        "year": 2022,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "thor-love-and-thunder",
+      "title": "Thor: Love and Thunder",
+      "type": "film",
+      "release_year": 2022,
+      "directors": "Taika Waititi",
+      "universe": "MCU",
+      "layer": 2,
+      "layer_label": "Feeds a direct setup film",
+      "tier": "recommended",
+      "suggested_watch_order": 35,
+      "description": "Thor teams up with Jane Foster, who wields Mjolnir as the Mighty Thor, to stop Gorr the God Butcher.",
+      "doomsday_connection": "Sets up Thor's current status and his adopted daughter Love.",
+      "doomsday_confirmed_characters": [
+        "Thor"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/thor-love-and-thunder.jpg",
+        "banner_url": "/data/streak-collection/banners/thor-love-and-thunder.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Thor: Love and Thunder",
+        "year": 2022,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "black-panther-wakanda-forever",
+      "title": "Black Panther: Wakanda Forever",
+      "type": "film",
+      "release_year": 2022,
+      "directors": "Ryan Coogler",
+      "universe": "MCU",
+      "layer": 2,
+      "layer_label": "Feeds a direct setup film",
+      "tier": "recommended",
+      "suggested_watch_order": 36,
+      "description": "Wakanda mourns T'Challa and Shuri takes up the Black Panther mantle while facing Namor and the underwater kingdom of Talokan.",
+      "doomsday_connection": "Sets up Shuri and Namor, both confirmed for Doomsday.",
+      "doomsday_confirmed_characters": [
+        "Shuri",
+        "Namor",
+        "M'Baku"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/black-panther-wakanda-forever.jpg",
+        "banner_url": "/data/streak-collection/banners/black-panther-wakanda-forever.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Black Panther: Wakanda Forever",
+        "year": 2022,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "ant-man-and-the-wasp-quantumania",
+      "title": "Ant-Man and the Wasp: Quantumania",
+      "type": "film",
+      "release_year": 2023,
+      "directors": "Peyton Reed",
+      "universe": "MCU",
+      "layer": 1,
+      "layer_label": "Directly connected to Doomsday",
+      "tier": "essential",
+      "suggested_watch_order": 37,
+      "description": "Scott Lang, Hope, Hank, Janet and Cassie are pulled into the Quantum Realm, where they face Kang the Conqueror.",
+      "doomsday_connection": "Establishes the Kang threat and the idea of many variants of one villain, the same setup Doomsday uses for Doom.",
+      "doomsday_confirmed_characters": [
+        "Scott Lang / Ant-Man",
+        "Cassie Lang"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/ant-man-and-the-wasp-quantumania.jpg",
+        "banner_url": "/data/streak-collection/banners/ant-man-and-the-wasp-quantumania.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Ant-Man and the Wasp: Quantumania",
+        "year": 2023,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "loki-season-2",
+      "title": "Loki (Season 2)",
+      "type": "series",
+      "release_year": 2023,
+      "creators": "Michael Waldron (creator)",
+      "universe": "MCU",
+      "layer": 1,
+      "layer_label": "Directly connected to Doomsday",
+      "tier": "essential",
+      "suggested_watch_order": 38,
+      "description": "The timelines begin to unravel and Loki makes a sacrifice to hold the branching multiverse together.",
+      "doomsday_connection": "Sets the state of the multiverse that Doomsday plays out in.",
+      "doomsday_confirmed_characters": [
+        "Loki"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/loki-season-2.jpg",
+        "banner_url": "/data/streak-collection/banners/loki-season-2.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Loki",
+        "year": 2023,
+        "media_type": "tv"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "x-men",
+      "title": "X-Men",
+      "type": "film",
+      "release_year": 2000,
+      "directors": "Bryan Singer",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "recommended",
+      "suggested_watch_order": 39,
+      "description": "Professor Xavier's X-Men face Magneto's Brotherhood as Wolverine and Rogue join the team.",
+      "doomsday_connection": "Introduces the original cast confirmed for Doomsday.",
+      "doomsday_confirmed_characters": [
+        "Professor X",
+        "Magneto",
+        "Cyclops"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/x-men.jpg",
+        "banner_url": "/data/streak-collection/banners/x-men.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "X-Men",
+        "year": 2000,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "x2-x-men-united",
+      "title": "X2: X-Men United",
+      "type": "film",
+      "release_year": 2003,
+      "directors": "Bryan Singer",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "recommended",
+      "suggested_watch_order": 40,
+      "description": "Colonel Stryker attacks Xavier's school, forcing the X-Men and Magneto's Brotherhood to team up. Jean Grey sacrifices herself at the end.",
+      "doomsday_connection": "Nightcrawler (Alan Cumming) first appears here and is in the Doomsday cast.",
+      "doomsday_confirmed_characters": [
+        "Nightcrawler",
+        "Professor X",
+        "Magneto",
+        "Cyclops"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/x2-x-men-united.jpg",
+        "banner_url": "/data/streak-collection/banners/x2-x-men-united.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "X2: X-Men United",
+        "year": 2003,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "x-men-the-last-stand",
+      "title": "X-Men: The Last Stand",
+      "type": "film",
+      "release_year": 2006,
+      "directors": "Brett Ratner",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "recommended",
+      "suggested_watch_order": 41,
+      "description": "A mutant 'cure' divides the community as Jean Grey returns as the Phoenix. Xavier dies and Magneto loses his powers.",
+      "doomsday_connection": "Introduces Kelsey Grammer's Beast. Days of Future Past later rewrites this timeline.",
+      "doomsday_confirmed_characters": [
+        "Beast",
+        "Professor X",
+        "Magneto",
+        "Cyclops"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/x-men-the-last-stand.jpg",
+        "banner_url": "/data/streak-collection/banners/x-men-the-last-stand.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "X-Men: The Last Stand",
+        "year": 2006,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "x-men-first-class",
+      "title": "X-Men: First Class",
+      "type": "film",
+      "release_year": 2011,
+      "directors": "Matthew Vaughn",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "recommended",
+      "suggested_watch_order": 42,
+      "description": "The origin of the friendship and split between Charles Xavier and Erik Lehnsherr during the 1962 Cuban Missile Crisis.",
+      "doomsday_connection": "Shows the origin of the Xavier and Magneto relationship.",
+      "doomsday_confirmed_characters": [
+        "Professor X",
+        "Magneto",
+        "Beast"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/x-men-first-class.jpg",
+        "banner_url": "/data/streak-collection/banners/x-men-first-class.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "X-Men: First Class",
+        "year": 2011,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "x-men-days-of-future-past",
+      "title": "X-Men: Days of Future Past",
+      "type": "film",
+      "release_year": 2014,
+      "directors": "Bryan Singer",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "recommended",
+      "suggested_watch_order": 43,
+      "description": "Wolverine's consciousness is sent back to 1973 to stop an event that leads to a future ruled by Sentinels. This rewrites the timeline.",
+      "doomsday_connection": "Important for understanding which version of the X-Men exists going into Doomsday.",
+      "doomsday_confirmed_characters": [
+        "Professor X",
+        "Magneto",
+        "Beast"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/x-men-days-of-future-past.jpg",
+        "banner_url": "/data/streak-collection/banners/x-men-days-of-future-past.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "X-Men: Days of Future Past",
+        "year": 2014,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "x-men-apocalypse",
+      "title": "X-Men: Apocalypse",
+      "type": "film",
+      "release_year": 2016,
+      "directors": "Bryan Singer",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "optional",
+      "suggested_watch_order": 44,
+      "description": "The young X-Men face En Sabah Nur, the first mutant, in 1983.",
+      "doomsday_connection": "Completes the rebooted Fox timeline.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/x-men-apocalypse.jpg",
+        "banner_url": "/data/streak-collection/banners/x-men-apocalypse.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "X-Men: Apocalypse",
+        "year": 2016,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "dark-phoenix",
+      "title": "Dark Phoenix",
+      "type": "film",
+      "release_year": 2019,
+      "directors": "Simon Kinberg",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "optional",
+      "suggested_watch_order": 45,
+      "description": "Jean Grey absorbs a cosmic force that makes her dangerously powerful.",
+      "doomsday_connection": "The last Fox X-Men film before Deadpool & Wolverine.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/dark-phoenix.jpg",
+        "banner_url": "/data/streak-collection/banners/dark-phoenix.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Dark Phoenix",
+        "year": 2019,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "x-men-origins-wolverine",
+      "title": "X-Men Origins: Wolverine",
+      "type": "film",
+      "release_year": 2009,
+      "directors": "Gavin Hood",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "optional",
+      "suggested_watch_order": 46,
+      "description": "Wolverine's backstory, including his brother Sabretooth and the Weapon X program. Deadpool also appears.",
+      "doomsday_connection": "Optional. Deadpool & Wolverine jokes about it. Nothing here is confirmed for Doomsday.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/x-men-origins-wolverine.jpg",
+        "banner_url": "/data/streak-collection/banners/x-men-origins-wolverine.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "X-Men Origins: Wolverine",
+        "year": 2009,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "the-wolverine",
+      "title": "The Wolverine",
+      "type": "film",
+      "release_year": 2013,
+      "directors": "James Mangold",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "optional",
+      "suggested_watch_order": 47,
+      "description": "Logan travels to Japan, grieving Jean Grey, and faces a threat to a dying industrialist.",
+      "doomsday_connection": "Optional side story; its post-credits scene sets up Days of Future Past.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/the-wolverine.jpg",
+        "banner_url": "/data/streak-collection/banners/the-wolverine.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "The Wolverine",
+        "year": 2013,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "logan",
+      "title": "Logan",
+      "type": "film",
+      "release_year": 2017,
+      "directors": "James Mangold",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "recommended",
+      "suggested_watch_order": 48,
+      "description": "In 2029, an aging Logan protects a young mutant, Laura, in a world where mutants have nearly vanished. Logan dies at the end.",
+      "doomsday_connection": "The emotional core of Deadpool & Wolverine.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/logan.jpg",
+        "banner_url": "/data/streak-collection/banners/logan.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Logan",
+        "year": 2017,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "deadpool",
+      "title": "Deadpool",
+      "type": "film",
+      "release_year": 2016,
+      "directors": "Tim Miller",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "recommended",
+      "suggested_watch_order": 49,
+      "description": "Wade Wilson becomes the mutant mercenary Deadpool after an experiment and hunts the man who disfigured him.",
+      "doomsday_connection": "Origin of Deadpool, the character Deadpool & Wolverine builds on.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/deadpool.jpg",
+        "banner_url": "/data/streak-collection/banners/deadpool.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Deadpool",
+        "year": 2016,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "deadpool-2",
+      "title": "Deadpool 2",
+      "type": "film",
+      "release_year": 2018,
+      "directors": "David Leitch",
+      "universe": "Fox X-Men",
+      "layer": 3,
+      "layer_label": "Deadpool / Fox X-Men chain",
+      "tier": "recommended",
+      "suggested_watch_order": 50,
+      "description": "Deadpool forms X-Force to protect a young mutant from the time-traveling Cable.",
+      "doomsday_connection": "Sets up the found-family theme that carries into Deadpool & Wolverine.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/deadpool-2.jpg",
+        "banner_url": "/data/streak-collection/banners/deadpool-2.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Deadpool 2",
+        "year": 2018,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "blade",
+      "title": "Blade",
+      "type": "film",
+      "release_year": 1998,
+      "directors": "Stephen Norrington",
+      "universe": "Marvel (New Line)",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 51,
+      "description": "Half-vampire Blade hunts vampires.",
+      "doomsday_connection": "Wesley Snipes' Blade appears in Deadpool & Wolverine.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/blade.jpg",
+        "banner_url": "/data/streak-collection/banners/blade.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Blade",
+        "year": 1998,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "blade-ii",
+      "title": "Blade II",
+      "type": "film",
+      "release_year": 2002,
+      "directors": "Guillermo del Toro",
+      "universe": "Marvel (New Line)",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 52,
+      "description": "Blade teams with vampires against a new breed of enemy.",
+      "doomsday_connection": "Background for the D&W Blade cameo.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/blade-ii.jpg",
+        "banner_url": "/data/streak-collection/banners/blade-ii.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Blade II",
+        "year": 2002,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "blade-trinity",
+      "title": "Blade: Trinity",
+      "type": "film",
+      "release_year": 2004,
+      "directors": "David S. Goyer",
+      "universe": "Marvel (New Line)",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 53,
+      "description": "Blade joins the Nightstalkers against Dracula.",
+      "doomsday_connection": "Background for the D&W Blade cameo.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/blade-trinity.jpg",
+        "banner_url": "/data/streak-collection/banners/blade-trinity.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Blade: Trinity",
+        "year": 2004,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "daredevil-2003",
+      "title": "Daredevil",
+      "type": "film",
+      "release_year": 2003,
+      "directors": "Mark Steven Johnson",
+      "universe": "Marvel (Fox)",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 54,
+      "description": "Matt Murdock fights crime as Daredevil.",
+      "doomsday_connection": "Ben Affleck's Daredevil appears in Deadpool & Wolverine.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/daredevil-2003.jpg",
+        "banner_url": "/data/streak-collection/banners/daredevil-2003.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Daredevil",
+        "year": 2003,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "elektra",
+      "title": "Elektra",
+      "type": "film",
+      "release_year": 2005,
+      "directors": "Rob Bowman",
+      "universe": "Marvel (Fox)",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 55,
+      "description": "Elektra, an assassin, protects a father and daughter.",
+      "doomsday_connection": "Jennifer Garner's Elektra appears in Deadpool & Wolverine.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/elektra.jpg",
+        "banner_url": "/data/streak-collection/banners/elektra.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Elektra",
+        "year": 2005,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "fantastic-four-2005",
+      "title": "Fantastic Four",
+      "type": "film",
+      "release_year": 2005,
+      "directors": "Tim Story",
+      "universe": "Marvel (Fox)",
+      "layer": 4,
+      "layer_label": "Deep background",
+      "tier": "optional",
+      "suggested_watch_order": 56,
+      "description": "Four astronauts gain powers from cosmic rays and face Victor Von Doom.",
+      "doomsday_connection": "Chris Evans' Johnny Storm appears in Deadpool & Wolverine; also an earlier take on Doom.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/fantastic-four-2005.jpg",
+        "banner_url": "/data/streak-collection/banners/fantastic-four-2005.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Fantastic Four",
+        "year": 2005,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "deadpool-and-wolverine",
+      "title": "Deadpool & Wolverine",
+      "type": "film",
+      "release_year": 2024,
+      "directors": "Shawn Levy",
+      "universe": "MCU / Fox X-Men",
+      "layer": 1,
+      "layer_label": "Directly connected to Doomsday",
+      "tier": "essential",
+      "suggested_watch_order": 57,
+      "description": "Wade Wilson is recruited by the TVA and teams up with a reluctant Wolverine to stop the erasure of the Fox timeline and defeat Cassandra Nova.",
+      "doomsday_connection": "The bridge between the Fox X-Men universe and the MCU. It is why the original X-Men cast can appear in Doomsday.",
+      "doomsday_confirmed_characters": [
+        "Gambit"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/deadpool-and-wolverine.jpg",
+        "banner_url": "/data/streak-collection/banners/deadpool-and-wolverine.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Deadpool & Wolverine",
+        "year": 2024,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "captain-america-brave-new-world",
+      "title": "Captain America: Brave New World",
+      "type": "film",
+      "release_year": 2025,
+      "directors": "Julius Onah",
+      "universe": "MCU",
+      "layer": 2,
+      "layer_label": "Feeds a direct setup film",
+      "tier": "recommended",
+      "suggested_watch_order": 58,
+      "description": "Sam Wilson, now Captain America, uncovers a conspiracy involving President Thaddeus Ross and the Leader.",
+      "doomsday_connection": "Continues Sam Wilson's story as Captain America into Doomsday.",
+      "doomsday_confirmed_characters": [
+        "Sam Wilson / Captain America",
+        "Joaquin Torres"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/captain-america-brave-new-world.jpg",
+        "banner_url": "/data/streak-collection/banners/captain-america-brave-new-world.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Captain America: Brave New World",
+        "year": 2025,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "thunderbolts",
+      "title": "Thunderbolts*",
+      "type": "film",
+      "release_year": 2025,
+      "directors": "Jake Schreier",
+      "universe": "MCU",
+      "layer": 1,
+      "layer_label": "Directly connected to Doomsday",
+      "tier": "essential",
+      "suggested_watch_order": 59,
+      "description": "A team of misfit anti-heroes led by Yelena Belova confronts the Void, a threat born from Bob Reynolds / Sentry.",
+      "doomsday_connection": "Introduces the team that goes into Doomsday. Its post-credits scene also shows the Fantastic Four's ship arriving in the main MCU.",
+      "doomsday_confirmed_characters": [
+        "Yelena Belova",
+        "Bucky Barnes",
+        "Red Guardian",
+        "Sentry / Bob Reynolds",
+        "John Walker",
+        "Ghost"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/thunderbolts.jpg",
+        "banner_url": "/data/streak-collection/banners/thunderbolts.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Thunderbolts*",
+        "year": 2025,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "the-fantastic-four-first-steps",
+      "title": "The Fantastic Four: First Steps",
+      "type": "film",
+      "release_year": 2025,
+      "directors": "Matt Shakman",
+      "universe": "MCU",
+      "layer": 1,
+      "layer_label": "Directly connected to Doomsday",
+      "tier": "essential",
+      "suggested_watch_order": 60,
+      "description": "Marvel's First Family protects an alternate 1960s Earth from Galactus and the Silver Surfer.",
+      "doomsday_connection": "Doctor Doom makes his MCU debut here, and the post-credits scene sets up the Fantastic Four's arrival in the main timeline.",
+      "doomsday_confirmed_characters": [
+        "Reed Richards",
+        "Sue Storm",
+        "Johnny Storm",
+        "Ben Grimm",
+        "Doctor Doom"
+      ],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/the-fantastic-four-first-steps.jpg",
+        "banner_url": "/data/streak-collection/banners/the-fantastic-four-first-steps.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "The Fantastic Four: First Steps",
+        "year": 2025,
+        "media_type": "movie"
+      },
+      "franchise": null,
+      "holland_cameo": false
+    },
+    {
+      "id": "spider-man-brand-new-day",
+      "title": "Spider-Man: Brand New Day",
+      "type": "film",
+      "release_year": 2026,
+      "directors": "Destin Daniel Cretton",
+      "universe": "MCU / Sony",
+      "layer": 1,
+      "layer_label": "Directly connected to Doomsday",
+      "tier": "recommended",
+      "suggested_watch_order": 61,
+      "description": "With the world having forgotten who he is, Peter Parker (Tom Holland) lives a quieter, more isolated life as a street-level Spider-Man.",
+      "doomsday_connection": "The last MCU release before Doomsday. Its post-credits scene is a Doomsday tease, though Tom Holland was not confirmed for the film.",
+      "doomsday_confirmed_characters": [],
+      "images": {
+        "poster_url": "/data/streak-collection/posters/spider-man-brand-new-day.jpg",
+        "banner_url": "/data/streak-collection/banners/spider-man-brand-new-day.jpg"
+      },
+      "tmdb_lookup": {
+        "query": "Spider-Man: Brand New Day",
+        "year": 2026,
+        "media_type": "movie"
+      },
+      "franchise": "Spider-Man (MCU, Tom Holland)",
+      "holland_cameo": false
+    }
+  ],
+  "collections": {
+    "spider_man": {
+      "sam_raimi_trilogy": [
+        "spider-man-2002",
+        "spider-man-2",
+        "spider-man-3"
+      ],
+      "amazing_spider_man_duology": [
+        "the-amazing-spider-man",
+        "the-amazing-spider-man-2"
+      ],
+      "mcu_tom_holland": [
+        "spider-man-homecoming",
+        "spider-man-far-from-home",
+        "spider-man-no-way-home",
+        "spider-man-brand-new-day"
+      ],
+      "tom_holland_also_appears_in": [
+        "captain-america-civil-war",
+        "avengers-infinity-war",
+        "avengers-endgame"
+      ],
+      "note": "Spider-Man: Brand New Day is the only one with a confirmed Doomsday tease; the Holland, Maguire and Garfield films are included because of No Way Home. Tom Holland's presence in Doomsday is not confirmed."
+    }
+  }
+}
