@@ -6,7 +6,7 @@ How the engineering skills should consume this repo's domain documentation when 
 
 - **`GLOSSARY.md`** at the repo root, or
 - **`GLOSSARY-MAP.md`** at the repo root if it exists: it points at one `GLOSSARY.md` per context. Read each one relevant to the topic.
-- **`docs/adr/`**: read ADRs that touch the area you're about to work in. In multi-context repos, also check `src/<context>/docs/adr/` for context-scoped decisions.
+- **`docs/adr/`**: read ADRs that touch the area you're about to work in. In multi-context repos, also check `<context>/docs/adr/` for context-scoped decisions.
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
@@ -37,6 +37,17 @@ Multi-context repo (presence of `GLOSSARY-MAP.md` at the root):
         ├── GLOSSARY.md
         └── docs/adr/
 ```
+
+## This repository's contexts
+
+This repo is multi-context, with the contexts kept at the top level rather than under `src/`:
+
+- **`GLOSSARY.md`** (root) — the **shared** glossary: the ticketing domain every surface builds on. Listed as the shared entry in `GLOSSARY-MAP.md`.
+- **`prototype/`** — the customer app.
+- **`admin/`** — the operator app.
+- **`door_staff_app/`** — the door-staff gatekeeping app.
+
+`GLOSSARY-MAP.md` routes to each context's `GLOSSARY.md`. System-wide decisions stay in `docs/adr/`; a context-specific decision goes in `<context>/docs/adr/`, created when the first such decision lands.
 
 ## Use the glossary's vocabulary
 

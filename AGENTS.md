@@ -10,4 +10,4 @@ Use the default labels `needs-triage`, `needs-info`, `ready-for-agent`, `ready-f
 
 ### Domain docs
 
-Use the single-context layout: root `GLOSSARY.md` and `docs/adr/`. See `docs/agents/domain.md`.
+Use the multi-context layout: root `GLOSSARY.md` holds the shared ticketing terms, and `GLOSSARY-MAP.md` routes to per-context glossaries under `prototype/`, `admin/`, and `door_staff_app/`. See `docs/agents/domain.md`.
