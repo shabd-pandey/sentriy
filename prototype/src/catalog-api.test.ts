@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { screeningIsBookable, sortCatalog, type CatalogTitle, type Screening } from "./catalog-api";
+import { normalizeTicketCode, screeningIsBookable, sortCatalog, ticketQrValue, type CatalogTitle, type Screening } from "./catalog-api";
 
 const showing: Screening = {
   id: "show-1",
@@ -75,3 +75,20 @@ describe("screening availability", () => {
     }, Date.parse(showing.startsAt))).toBe(false);
   });
 });
+
+
+describe("ticket contract", () => {
+  it("builds the QR payload from the order code", () => {
+    expect(ticketQrValue("MSY-AB12-CD34")).toBe("marvelsyllabus://ticket/MSY-AB12-CD34");
+  });
+
+  it("accepts the full QR payload or the raw order code", () => {
+    expect(normalizeTicketCode("marvelsyllabus://ticket/msy-ab12-cd34")).toBe("MSY-AB12-CD34");
+    expect(normalizeTicketCode("  MSY-AB12-CD34  ")).toBe("MSY-AB12-CD34");
+  });
+
+  it("rejects unknown code shapes", () => {
+    expect(() => normalizeTicketCode("HORIZON-2048")).toThrow("invalid_code");
+  });
+});
+

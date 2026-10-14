@@ -267,6 +267,62 @@ export function remainingCapacity(screening: Screening) {
   return Math.max(0, screening.capacity - screening.soldCount - screening.heldCount);
 }
 
+// ---- Shared ticketing seam (staff + door reconciliation) ----
+// Same contract as the customer wallet and the Flutter door app.
+
+export interface StaffScreening {
+  id: string;
+  titleId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  location: string;
+  capacity: number;
+  cancelled: boolean;
+  soldCount: number;
+  checkedInCount: number;
+}
+
+export type StaffCheckStatus = "accepted" | "already_used" | "valid" | "invalid";
+
+export interface StaffTicket {
+  code: string;
+  status: StaffCheckStatus;
+  orderCode?: string;
+  title?: string;
+  quantity?: number;
+  screeningId?: string;
+  startsAt?: string;
+  location?: string;
+}
+
+export function normalizeTicketCode(raw: string) {
+  const match = raw.trim().toUpperCase().match(/MSY-[A-Z0-9]{4}-[A-Z0-9]{4}/);
+  if (!match) throw new Error("invalid_code");
+  return match[0];
+}
+
+export const loadStaffScreenings = (token: string) =>
+  apiRequest<StaffScreening[]>("/api/staff/screenings", token);
+
+export const validateStaffTicket = (token: string, code: string) =>
+  apiRequest<StaffTicket>("/api/staff/validate", token, {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+
+export const checkInStaffTicket = (token: string, code: string) =>
+  apiRequest<{ status: StaffCheckStatus; code: string }>("/api/staff/check-in", token, {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+
+export const loadAdminBookings = (token: string, screeningId?: string) =>
+  apiRequest<StaffTicket[]>(
+    screeningId ? `/api/admin/bookings?screeningId=${encodeURIComponent(screeningId)}` : "/api/admin/bookings",
+    token,
+  );
+
 export function money(minor: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(minor / 100);
 }

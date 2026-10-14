@@ -296,25 +296,43 @@ export default function CommandDeck({ authConfigured = false, signedIn = false, 
         {snapshot.source === "demo" && <button type="button" className="cd-reset" onClick={() => { if (window.confirm("Reset all demo data to the original seed?")) setSnapshot(resetAdminData()); }}>Reset demo</button>}
       </header>
 
-      <nav className="cd-tabs" role="tablist" aria-label="Operator workspace">
-        {([
-          ["activity", "Activity"],
-          ["catalog", "Catalog"],
-          ["screenings", "Screenings"],
-          ["banners", "Banners"],
-          ["rewards", "Rewards"],
-          ["settings", "Settings"],
-        ] as const).map(([id, label]) => (
-          <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "is-active" : ""} onClick={() => setTab(id)}>
-            {label}
-            {id === "activity" && <span>{activityToday}</span>}
-            {id === "catalog" && <span>{snapshot.catalog.length}</span>}
-            {id === "screenings" && <span>{screeningsOnSale}</span>}
-            {id === "banners" && <span>{bannersPublished}</span>}
-            {id === "rewards" && <span>{campaignsActive}</span>}
-          </button>
-        ))}
-      </nav>
+      <section className="cd-profile-nav">
+        <div className="cd-profile-intro">
+          <p className="cd-profile-kicker">Operator profile · 2026</p>
+          <h1>Your command<br />timeline.</h1>
+          <p>Choose a workspace to shape every screening, story, and reward in the MarvelSyllabus universe.</p>
+          <span className="cd-profile-signature">MS / ADMIN</span>
+        </div>
+        <nav className="cd-tabs" role="tablist" aria-label="Operator workspace">
+          <div className="cd-tabs-head">
+            <span>THE OPERATOR'S LOGBOOK</span>
+            <strong>MARVELSYLLABUS</strong>
+          </div>
+          <div className="cd-tabs-list">
+            {([
+              ["activity", "Activity", "01"],
+              ["catalog", "Catalog", "02"],
+              ["screenings", "Screenings", "03"],
+              ["banners", "Banners", "04"],
+              ["rewards", "Rewards", "05"],
+              ["settings", "Settings", "06"],
+            ] as const).map(([id, label, number]) => {
+              const count = id === "activity" ? activityToday
+                : id === "catalog" ? snapshot.catalog.length
+                  : id === "screenings" ? screeningsOnSale
+                    : id === "banners" ? bannersPublished
+                      : id === "rewards" ? campaignsActive
+                        : undefined;
+              return (
+                <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "is-active" : ""} onClick={() => setTab(id)}>
+                  <small>{number}</small>{label}{count !== undefined && <span>{count}</span>}
+                </button>
+              );
+            })}
+          </div>
+          <div className="cd-tabs-foot"><span>SELECTED</span><strong>{tab.toUpperCase()}</strong><i /></div>
+        </nav>
+      </section>
 
       <main className="cd-content">
         {tab === "activity" && <ActivityTab snapshot={snapshot} clock={clock} live={live} onOpenScreenings={() => setTab("screenings")} onOpenCatalog={() => setTab("catalog")} />}

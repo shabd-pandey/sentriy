@@ -1,4 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Camera: QR scanning at the door. Without this the release build
+         shows a black viewfinder — the permission must be declared here AND
+         granted at runtime (the app requests it on first launch). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.FLASHLIGHT" />
+    <!-- Internet: live ticket validation against the shared Pages API.
+         (Debug/profile manifests declare this too; release needs it here.) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
     <application
         android:label="Gatekeeper"
         android:name="${applicationName}"

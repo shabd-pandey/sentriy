@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.door_staff_app"
+    namespace = "app.marvelsyllabus.gatekeeper"
     compileSdk = flutter.compileSdkVersion
 
     compileOptions {
@@ -14,11 +14,11 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.door_staff_app"
+        applicationId = "app.marvelsyllabus.gatekeeper"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // 23 is the floor for permission_handler + mobile_scanner v6.
+        minSdk = 23
         targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)

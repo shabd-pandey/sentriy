@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   money,
+  normalizeTicketCode,
   remainingCapacity,
   screeningStatus,
   sortCatalog,
@@ -105,3 +106,15 @@ describe("money", () => {
     expect(money(50000)).toContain("500");
   });
 });
+
+
+describe("staff ticket contract", () => {
+  it("accepts the full QR payload or the raw order code", () => {
+    expect(normalizeTicketCode("marvelsyllabus://ticket/msy-ab12-cd34")).toBe("MSY-AB12-CD34");
+  });
+
+  it("rejects unknown code shapes", () => {
+    expect(() => normalizeTicketCode("HORIZON-2048")).toThrow("invalid_code");
+  });
+});
+

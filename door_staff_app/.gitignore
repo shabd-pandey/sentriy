@@ -44,5 +44,9 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# Release binaries are built per event (they embed a short-lived staff token)
+/*.apk
+/*.aab
+
 # Widget Preview related
 .widget_preview/

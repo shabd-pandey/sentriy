@@ -1,7 +1,7 @@
 name: door_staff_app
-description: A mobile ticket check-in app for event door staff.
+description: Gatekeeper — the MarvelSyllabus door-staff ticket check-in app.
 publish_to: none
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ">=3.6.0 <4.0.0"
@@ -10,7 +10,9 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  http: ^1.2.0
   mobile_scanner: ^6.0.10
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:

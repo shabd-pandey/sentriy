@@ -1286,3 +1286,108 @@ footer {
 
 /* The supplied Figma Make game is rendered as a full-screen customer surface. */
 .game-shell { position: fixed; z-index: 70; inset: 0; min-height: 100vh; }
+
+/* TVA ID card: port of style/User Profile Page.make (copper-and-charcoal personnel card). */
+.tva-card-stage { width: min(100%, 470px); margin: 0 auto; perspective: 1600px; }
+.tva-flip-control { display: flex; align-items: center; justify-content: center; gap: 10px; height: 38px; margin-bottom: 14px; color: rgba(32, 27, 25, .45); font-family: "Space Mono", monospace; font-size: 8px; letter-spacing: .13em; text-transform: uppercase; }
+.tva-flip-control > span { width: 62px; transition: color .25s ease; }
+.tva-flip-control > span:first-child { text-align: right; }
+.tva-flip-control > span.active { color: #78391f; font-weight: 700; }
+.tva-flip-switch { width: 48px; height: 25px; padding: 3px; border: 1px solid rgba(120, 57, 31, .45); border-radius: 20px; background: rgba(120, 57, 31, .18); }
+.tva-flip-switch > span { display: block; width: 17px; height: 17px; border-radius: 50%; background: #78391f; transition: transform .35s cubic-bezier(.2, .8, .2, 1); }
+.tva-flip-switch.is-back { background: rgba(184, 95, 54, .32); }
+.tva-flip-switch.is-back > span { transform: translateX(23px); }
+.tva-flipper { position: relative; height: 800px; transform-style: preserve-3d; transition: transform .75s cubic-bezier(.2, .72, .2, 1); }
+.tva-flipper.is-flipped { transform: rotateY(180deg); }
+.tva-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.tva-back { transform: rotateY(180deg); }
+.tva-id-card { width: 100%; height: 100%; padding: 10px; border: 1px solid #78391f; background: repeating-linear-gradient(90deg, rgba(255, 255, 255, .04) 0 1px, transparent 1px 4px), linear-gradient(110deg, #8e4429, #df9164 48%, #7d351e); box-shadow: 26px 30px 55px rgba(49, 25, 15, .24), 4px 5px 0 rgba(61, 29, 17, .22); color: #f2e6d4; }
+.tva-inner { height: 100%; padding: 27px 28px 23px; border: 2px solid #242120; background: linear-gradient(rgba(255, 255, 255, .016) 50%, rgba(0, 0, 0, .025) 50%), #242120; background-size: 100% 4px; }
+.tva-heading { display: flex; align-items: flex-start; justify-content: space-between; padding-bottom: 21px; border-bottom: 1px solid rgba(223, 145, 100, .42); }
+.tva-authority, .tva-serial { display: block; font-family: "Space Mono", monospace; font-size: 9px; letter-spacing: .16em; text-transform: uppercase; }
+.tva-authority { color: #df9164; font-weight: 700; }
+.tva-serial { margin-top: 8px; color: rgba(242, 230, 212, .58); letter-spacing: .09em; }
+.tva-logo-plate { overflow: hidden; width: 91px; height: 45px; flex: none; border: 1px solid #78391f; background: #b85f36; }
+.tva-logo-plate img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tva-photo-section { position: relative; width: 230px; margin: 25px auto 19px; }
+.tva-photo-frame { position: relative; height: 250px; border: 2px solid #b85f36; background: #201b19; box-shadow: inset 0 0 0 5px #242120, inset 0 0 0 7px #78391f; }
+.tva-photo-frame img { display: block; width: 100%; height: 100%; padding: 8px; object-fit: cover; filter: sepia(.28) contrast(1.06) saturate(.82); }
+.tva-photo-placeholder { display: grid; width: 100%; height: 100%; place-items: center; color: #f2e6d4; font-family: "Chakra Petch", sans-serif; font-size: 96px; }
+.tva-scanline { position: absolute; inset: 8px; pointer-events: none; background: repeating-linear-gradient(0deg, transparent 0 3px, rgba(18, 15, 14, .11) 3px 4px); }
+.tva-photo-trigger { position: absolute; right: -18px; bottom: -17px; display: grid; width: 46px; height: 46px; place-items: center; border: 3px solid #242120; border-radius: 50%; background: #df9164; color: #242120; box-shadow: 0 4px 0 #78391f; transition: transform .2s ease; }
+.tva-photo-trigger:hover { transform: translateY(-2px); }
+.tva-photo-menu { position: absolute; top: 188px; left: 215px; z-index: 5; width: 260px; padding: 8px; border: 1px solid #b85f36; background: #f2e6d4; box-shadow: 12px 14px 30px rgba(0, 0, 0, .3); color: #201b19; }
+.tva-photo-option { display: flex; width: 100%; align-items: center; gap: 11px; padding: 10px; border: 0; background: transparent; color: inherit; text-align: left; }
+.tva-photo-option:hover { background: rgba(184, 95, 54, .12); }
+.tva-option-icon { display: grid; width: 34px; height: 34px; flex: none; place-items: center; border: 1px solid rgba(120, 57, 31, .35); color: #78391f; }
+.tva-photo-option strong, .tva-photo-option small { display: block; }
+.tva-photo-option strong { font-size: 12px; }
+.tva-photo-option small { margin-top: 2px; color: #5f514a; font-size: 9px; }
+.tva-hidden { position: absolute; overflow: hidden; width: 1px; height: 1px; white-space: nowrap; clip: rect(0 0 0 0); }
+.tva-name-field { display: block; position: relative; text-align: center; }
+.tva-name-field > span:first-child { display: block; margin-bottom: 3px; color: rgba(242, 230, 212, .5); font-family: "Space Mono", monospace; font-size: 8px; letter-spacing: .18em; text-transform: uppercase; }
+.tva-name-field input { width: 100%; padding: 0 38px 5px; border: 0; border-bottom: 1px solid transparent; background: transparent; color: #f2e6d4; font-size: 28px; font-weight: 600; text-align: center; }
+.tva-name-field input:hover, .tva-name-field input:focus { border-bottom-color: #b85f36; }
+.tva-edit-hint { display: block; color: #df9164; font-family: "Space Mono", monospace; font-size: 7px; letter-spacing: .12em; text-transform: uppercase; opacity: 0; transition: opacity .2s; }
+.tva-name-field:hover .tva-edit-hint, .tva-name-field:focus-within .tva-edit-hint { opacity: 1; }
+.tva-stats { display: grid; grid-template-columns: 1fr 1fr; margin-top: 20px; border-top: 1px solid rgba(223, 145, 100, .42); border-bottom: 1px solid rgba(223, 145, 100, .42); }
+.tva-stat { padding: 17px 12px 15px; text-align: center; }
+.tva-stat + .tva-stat { border-left: 1px solid rgba(223, 145, 100, .42); }
+.tva-stat-number { display: block; color: #df9164; font-family: "Space Mono", monospace; font-size: 27px; font-weight: 700; line-height: 1; }
+.tva-stat-label { display: block; margin-top: 7px; color: rgba(242, 230, 212, .65); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.tva-identity { display: flex; align-items: flex-end; justify-content: space-between; padding: 17px 0 19px; }
+.tva-meta-label { display: block; margin-bottom: 4px; color: rgba(242, 230, 212, .45); font-family: "Space Mono", monospace; font-size: 7px; letter-spacing: .16em; text-transform: uppercase; }
+.tva-identity strong { color: #df9164; font-family: "Space Mono", monospace; font-size: 11px; letter-spacing: .09em; }
+.tva-identity .qr-code { width: 52px; height: 52px; padding: 3px; background: #f2e6d4; }
+.tva-identity .qr-code img { display: block; width: 100%; height: 100%; }
+.tva-qr-pending { color: rgba(242, 230, 212, .42); font-size: 8px; letter-spacing: .08em; text-align: right; text-transform: uppercase; }
+.tva-footer { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 0; border-top: 1px solid #b85f36; }
+.tva-footer strong { color: #df9164; font-family: "Space Mono", monospace; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+.tva-footer span { color: rgba(242, 230, 212, .4); font-size: 8px; letter-spacing: .08em; text-transform: uppercase; }
+.tva-share-btn { display: inline-flex; width: 100%; min-height: 36px; align-items: center; justify-content: center; gap: 6px; margin-top: 18px; border: 1px solid rgba(231, 164, 118, .55); background: rgba(184, 95, 54, .18); color: #f2e6d4; font-family: "Space Mono", monospace; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.tva-share-btn:hover { background: #b85f36; }
+.tva-back-inner { position: relative; overflow: hidden; padding: 23px 25px 20px; }
+.tva-back-heading { display: flex; position: relative; z-index: 2; align-items: flex-start; justify-content: space-between; }
+.tva-mini { color: #df9164; font-size: 25px; font-weight: 700; letter-spacing: -4px; }
+.tva-back .tree-art { height: 400px; margin-top: 10px; }
+.tva-back .tree-lines { stroke: rgba(223, 145, 100, .85); }
+.tva-back .tree-nodes { fill: #df9164; stroke: #242120; stroke-width: 2; }
+.tva-back .branch-word { background: #242120; color: #f2e6d4; }
+.tva-tree-message { position: relative; z-index: 2; margin: -9px auto 13px; text-align: center; }
+.tva-tree-message span { display: block; color: rgba(242, 230, 212, .48); font-family: "Space Mono", monospace; font-size: 7px; letter-spacing: .2em; text-transform: uppercase; }
+.tva-tree-message strong { display: block; margin-top: 3px; color: #df9164; font-size: 18px; font-weight: 600; }
+.tva-tree-message p { max-width: 320px; margin: 7px auto 0; color: rgba(242, 230, 212, .56); font-size: 9px; line-height: 1.45; }
+.tva-back-footer { margin-top: 6px; }
+.tva-icon-button { display: grid; width: 42px; height: 42px; place-items: center; border: 1px solid rgba(242, 230, 212, .25); background: transparent; color: #f2e6d4; }
+.tva-camera-backdrop { position: fixed; z-index: 80; inset: 0; display: grid; padding: 24px; place-items: center; background: rgba(24, 19, 17, .78); backdrop-filter: blur(8px); }
+.tva-camera-modal { width: min(560px, 100%); padding: 22px; border: 1px solid #b85f36; background: #242120; box-shadow: 28px 34px 70px rgba(0, 0, 0, .45); color: #f2e6d4; }
+.tva-camera-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.tva-camera-title { margin: 5px 0 0; font-size: 22px; font-weight: 600; }
+.tva-viewfinder { position: relative; overflow: hidden; aspect-ratio: 4 / 3; border: 1px solid #78391f; background: #110f0e; }
+.tva-viewfinder video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+.tva-camera-error { display: grid; height: 100%; padding: 48px; place-items: center; color: rgba(242, 230, 212, .65); line-height: 1.5; text-align: center; }
+.tva-focus { position: absolute; width: 28px; height: 28px; border-color: #df9164; border-style: solid; }
+.tva-focus-a { top: 18px; left: 18px; border-width: 2px 0 0 2px; }
+.tva-focus-b { top: 18px; right: 18px; border-width: 2px 2px 0 0; }
+.tva-focus-c { bottom: 18px; left: 18px; border-width: 0 0 2px 2px; }
+.tva-focus-d { right: 18px; bottom: 18px; border-width: 0 2px 2px 0; }
+.tva-camera-actions { display: flex; position: relative; min-height: 78px; align-items: center; justify-content: center; }
+.tva-camera-actions > span { position: absolute; left: 0; color: rgba(242, 230, 212, .45); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.tva-shutter { display: grid; width: 58px; height: 58px; place-items: center; border: 2px solid #df9164; border-radius: 50%; background: transparent; }
+.tva-shutter > span { display: block; width: 34px; height: 34px; border-radius: 50%; background: #df9164; }
+.tva-shutter:disabled { cursor: not-allowed; opacity: .35; }
+
+@media (max-width: 760px) {
+  .tva-flipper { height: 780px; }
+  .tva-inner { padding: 22px 18px 19px; }
+  .tva-photo-section { width: 210px; }
+  .tva-photo-frame { height: 228px; }
+  .tva-photo-menu { top: 210px; left: 50%; transform: translateX(-50%); }
+  .tva-footer strong { font-size: 10px; }
+  .tva-footer span { font-size: 6px; }
+  .tva-camera-actions > span { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tva-flipper, .tva-flip-switch > span, .tva-photo-trigger, .tva-edit-hint { transition: none; }
+}

@@ -2,8 +2,12 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:permission_handler/permission_handler.dart';
 
+import 'api_config.dart';
+import 'api_ticket_validator.dart';
 import 'demo_ticket_validator.dart';
+import 'screening.dart';
 import 'ticket.dart';
 
 const _surface = Color(0xFF141A1F);
@@ -11,6 +15,8 @@ const _muted = Color(0xFF8F9AA3);
 const _accent = Color(0xFFB8F36B);
 const _green = Color(0xFF67E3A1);
 const _red = Color(0xFFFF7474);
+
+enum _CameraState { checking, granted, denied, blocked }
 
 class CheckInScreen extends StatefulWidget {
   const CheckInScreen({super.key});
@@ -20,44 +26,245 @@ class CheckInScreen extends StatefulWidget {
 }
 
 class _CheckInScreenState extends State<CheckInScreen> {
-  final _validator = DemoTicketValidator();
-  final _scanner = MobileScannerController(
-    detectionSpeed: DetectionSpeed.noDuplicates,
-    formats: const [BarcodeFormat.qrCode],
-  );
+  final _demoValidator = DemoTicketValidator();
+  ApiTicketValidator? _liveValidator;
+  MobileScannerController? _scanner;
+  Timer? _countsTimer;
   final List<_RecentCheckIn> _recentCheckIns = [];
 
+  _CameraState _camera = _CameraState.checking;
   TicketCheckResult? _latestResult;
   bool _processingScan = false;
-  int _checkedInCount = 128;
-  static const _capacity = 240;
+  String? _bannerError;
+
+  // Live event state (replaces the old hard-coded demo header).
+  List<StaffScreening> _screenings = [];
+  String? _selectedScreeningId;
+  bool _loadingScreenings = false;
+
+  // Demo-mode local counters (offline rehearsal only).
+  int _demoCheckedIn = 0;
+  static const _demoCapacity = 240;
+
+  bool get _isLive => _liveValidator != null;
+
+  StaffScreening? get _selectedScreening {
+    for (final screening in _screenings) {
+      if (screening.id == _selectedScreeningId) return screening;
+    }
+    return _screenings.isEmpty ? null : _screenings.first;
+  }
+
+  int get _checkedInCount =>
+      _isLive ? (_selectedScreening?.checkedInCount ?? 0) : _demoCheckedIn;
+
+  int get _capacity =>
+      _isLive ? (_selectedScreening?.capacity ?? 0) : _demoCapacity;
+
+  @override
+  void initState() {
+    super.initState();
+    if (ApiConfig.isLive) {
+      _liveValidator = ApiTicketValidator(
+        apiBaseUrl: ApiConfig.apiBaseUrl,
+        staffToken: ApiConfig.staffToken,
+      );
+    }
+    unawaited(_requestCamera());
+    if (_isLive) {
+      unawaited(_loadScreenings());
+      _countsTimer = Timer.periodic(
+        const Duration(seconds: 20),
+        (_) => _refreshCounts(silent: true),
+      );
+    }
+  }
 
   @override
   void dispose() {
-    _scanner.dispose();
+    _countsTimer?.cancel();
+    _scanner?.dispose();
     super.dispose();
   }
+
+  // ---- Camera permission (the release-build black-screen fix) ----
+  //
+  // Declaring CAMERA in AndroidManifest.xml is necessary but not sufficient:
+  // Android also requires a runtime grant. The scanner is only created after
+  // the grant, and every non-granted state gets an actionable screen instead
+  // of a black viewfinder.
+
+  Future<void> _requestCamera() async {
+    final status = await Permission.camera.status;
+    if (!mounted) return;
+    if (status.isGranted || status.isLimited) {
+      _grantCamera();
+      return;
+    }
+    if (status.isPermanentlyDenied || status.isRestricted) {
+      setState(() => _camera = _CameraState.blocked);
+      return;
+    }
+    final requested = await Permission.camera.request();
+    if (!mounted) return;
+    if (requested.isGranted || requested.isLimited) {
+      _grantCamera();
+    } else if (requested.isPermanentlyDenied || requested.isRestricted) {
+      setState(() => _camera = _CameraState.blocked);
+    } else {
+      setState(() => _camera = _CameraState.denied);
+    }
+  }
+
+  void _grantCamera() {
+    _scanner ??= MobileScannerController(
+      detectionSpeed: DetectionSpeed.noDuplicates,
+      formats: const [BarcodeFormat.qrCode],
+    );
+    setState(() => _camera = _CameraState.granted);
+  }
+
+  // ---- Live screenings (same rows the admin Command Deck reads) ----
+
+  Future<void> _loadScreenings() async {
+    final live = _liveValidator;
+    if (live == null) return;
+    setState(() {
+      _loadingScreenings = true;
+      _bannerError = null;
+    });
+    try {
+      final screenings = await live.fetchScreenings();
+      if (!mounted) return;
+      setState(() {
+        _screenings = screenings;
+        _selectedScreeningId ??= screenings.isEmpty ? null : screenings.first.id;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _bannerError = _friendlyError(e));
+    } finally {
+      if (mounted) setState(() => _loadingScreenings = false);
+    }
+  }
+
+  Future<void> _refreshCounts({bool silent = false}) async {
+    final live = _liveValidator;
+    if (live == null) return;
+    try {
+      final screenings = await live.fetchScreenings();
+      if (!mounted) return;
+      setState(() {
+        _screenings = screenings;
+        if (_selectedScreeningId != null &&
+            screenings.every((s) => s.id != _selectedScreeningId)) {
+          _selectedScreeningId =
+              screenings.isEmpty ? null : screenings.first.id;
+        }
+        if (!silent) _bannerError = null;
+      });
+    } catch (e) {
+      if (!mounted || silent) return;
+      setState(() => _bannerError = _friendlyError(e));
+    }
+  }
+
+  String _friendlyError(Object e) {
+    final message = e is StateError ? e.message : e.toString();
+    if (message.contains('staff_unauthorized')) {
+      return 'Staff session expired or not staff — rebuild with a fresh STAFF_TOKEN.';
+    }
+    if (message.contains('offline')) {
+      return 'No connection to the ticketing service. Check venue network.';
+    }
+    if (message.contains('request_timeout')) {
+      return 'Ticketing service is slow — retrying. Scans queue locally.';
+    }
+    return 'Live data unavailable ($message).';
+  }
+
+  // ---- Scanning ----
 
   void _onDetect(BarcodeCapture capture) {
     if (_processingScan) return;
     for (final barcode in capture.barcodes) {
       final code = barcode.rawValue;
       if (code != null && code.trim().isNotEmpty) {
-        _checkTicket(code);
+        unawaited(_checkTicket(code));
         return;
       }
     }
   }
 
-  void _checkTicket(String code) {
+  Future<void> _checkTicket(String code) async {
     if (!mounted || _processingScan) return;
     _processingScan = true;
-    unawaited(_scanner.stop());
+    await _scanner?.stop();
 
-    final result = _validator.checkIn(code);
+    final live = _liveValidator;
+    if (live == null) {
+      _applyResult(_demoValidator.checkIn(code));
+      return;
+    }
+    try {
+      final result = await live.checkIn(code);
+      if (!mounted) return;
+      setState(() => _bannerError = null);
+      _applyResult(result, countLocally: true);
+      if (result.isAccepted) unawaited(_refreshCounts(silent: true));
+    } on FormatException {
+      _applyResult(
+        TicketCheckResult(
+          status: TicketStatus.invalid,
+          code: code.trim().toUpperCase(),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is StateError ? e.message : '';
+      if (message.contains('staff_unauthorized')) {
+        // Fail closed: never admit on an auth error, and never silently
+        // fall back to the demo list (that would admit fake tickets).
+        setState(
+          () => _bannerError =
+              'Staff session expired or not staff — rebuild with a fresh STAFF_TOKEN.',
+        );
+        _applyResult(
+          TicketCheckResult(
+            status: TicketStatus.invalid,
+            code: code.trim().toUpperCase(),
+          ),
+        );
+        return;
+      }
+      // Network/timeout only: keep the door moving on the demo list but say
+      // so loudly — staff must re-scan these codes once back online.
+      setState(
+        () => _bannerError =
+            'Live validation failed — DEMO fallback used. Re-scan these codes when online.',
+      );
+      _applyResult(_demoValidator.checkIn(code));
+    }
+  }
+
+  void _applyResult(TicketCheckResult result, {bool countLocally = false}) {
+    if (!mounted) return;
     setState(() {
       _latestResult = result;
-      if (result.isAccepted) _checkedInCount++;
+      if (result.isAccepted) {
+        if (_isLive && countLocally) {
+          final selected = _selectedScreening;
+          if (selected != null) {
+            final index =
+                _screenings.indexWhere((s) => s.id == selected.id);
+            if (index != -1) {
+              _screenings[index] = selected.incrementCheckedIn();
+            }
+          }
+        } else if (!_isLive) {
+          _demoCheckedIn++;
+        }
+      }
       _recentCheckIns.insert(
         0,
         _RecentCheckIn(result: result, checkedAt: DateTime.now()),
@@ -71,11 +278,11 @@ class _CheckInScreenState extends State<CheckInScreen> {
       _latestResult = null;
       _processingScan = false;
     });
-    await _scanner.start();
+    if (_camera == _CameraState.granted) await _scanner?.start();
   }
 
   Future<void> _showManualEntry() async {
-    await _scanner.stop();
+    await _scanner?.stop();
     if (!mounted) return;
 
     final controller = TextEditingController();
@@ -91,7 +298,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
           textInputAction: TextInputAction.done,
           onSubmitted: (value) => Navigator.pop(dialogContext, value),
           decoration: const InputDecoration(
-            hintText: 'e.g. HORIZON-2048',
+            hintText: 'e.g. MSY-AB12-CD34',
             prefixIcon: Icon(Icons.confirmation_number_outlined),
           ),
         ),
@@ -111,16 +318,19 @@ class _CheckInScreenState extends State<CheckInScreen> {
 
     if (!mounted) return;
     if (code == null) {
-      if (_latestResult == null) await _scanner.start();
+      if (_latestResult == null && _camera == _CameraState.granted) {
+        await _scanner?.start();
+      }
       return;
     }
     _processingScan = false;
-    _checkTicket(code);
+    await _checkTicket(code);
   }
 
   @override
   Widget build(BuildContext context) {
-    final progress = _checkedInCount / _capacity;
+    final capacity = _capacity;
+    final progress = capacity > 0 ? _checkedInCount / capacity : 0.0;
 
     return Scaffold(
       body: SafeArea(
@@ -131,7 +341,11 @@ class _CheckInScreenState extends State<CheckInScreen> {
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                 children: [
-                  _buildDemoNotice(),
+                  _buildModeBanner(),
+                  if (_bannerError != null) ...[
+                    const SizedBox(height: 10),
+                    _buildErrorBanner(_bannerError!),
+                  ],
                   const SizedBox(height: 24),
                   _buildEventHeader(),
                   const SizedBox(height: 20),
@@ -203,7 +417,11 @@ class _CheckInScreenState extends State<CheckInScreen> {
     );
   }
 
-  Widget _buildDemoNotice() {
+  Widget _buildModeBanner() {
+    final live = _isLive;
+    final message = live
+        ? 'LIVE MODE  ·  Validating against the shared ticketing service'
+        : 'DEMO MODE  ·  Rehearsal only — build with API_BASE_URL + STAFF_TOKEN for doors';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -211,14 +429,14 @@ class _CheckInScreenState extends State<CheckInScreen> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFF514024)),
       ),
-      child: const Row(
+      child: Row(
         children: [
-          Icon(Icons.info_outline, color: _accent, size: 16),
-          SizedBox(width: 9),
+          const Icon(Icons.info_outline, color: _accent, size: 16),
+          const SizedBox(width: 9),
           Expanded(
             child: Text(
-              'DEMO MODE  ·  Connect a ticketing service for live validation',
-              style: TextStyle(
+              message,
+              style: const TextStyle(
                 color: Color(0xFFE0C88F),
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
@@ -230,7 +448,115 @@ class _CheckInScreenState extends State<CheckInScreen> {
     );
   }
 
+  Widget _buildErrorBanner(String message) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF2A1414),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF5A2626)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: _red, size: 16),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Color(0xFFF0B9B9),
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEventHeader() {
+    if (!_isLive) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'DEMO EVENT · REHEARSAL ONLY',
+            style: TextStyle(
+              color: _accent,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.6,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'The Last Horizon',
+            style: TextStyle(fontSize: 27, fontWeight: FontWeight.w700),
+          ),
+          SizedBox(height: 5),
+          Text(
+            'Sample data — live screenings appear once the API is configured.',
+            style: TextStyle(color: _muted, fontSize: 13),
+          ),
+        ],
+      );
+    }
+    if (_loadingScreenings && _screenings.isEmpty) {
+      return const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'TONIGHT',
+            style: TextStyle(
+              color: _accent,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.6,
+            ),
+          ),
+          SizedBox(height: 8),
+          Text(
+            'Loading screenings…',
+            style: TextStyle(fontSize: 27, fontWeight: FontWeight.w700),
+          ),
+        ],
+      );
+    }
+    final selected = _selectedScreening;
+    if (selected == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'TONIGHT',
+            style: TextStyle(
+              color: _accent,
+              fontSize: 10,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.6,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'No screenings found',
+            style: TextStyle(fontSize: 27, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 5),
+          const Text(
+            'Schedule one in the Command Deck first.',
+            style: TextStyle(color: _muted, fontSize: 13),
+          ),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            onPressed: _loadScreenings,
+            icon: const Icon(Icons.refresh, size: 17),
+            label: const Text('Retry'),
+            style: OutlinedButton.styleFrom(foregroundColor: Colors.white),
+          ),
+        ],
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -244,42 +570,81 @@ class _CheckInScreenState extends State<CheckInScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'The Last Horizon',
-          style: TextStyle(fontSize: 27, fontWeight: FontWeight.w700),
+        DropdownButton<String>(
+          value: selected.id,
+          isExpanded: true,
+          dropdownColor: _surface,
+          style: const TextStyle(
+            fontSize: 27,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+          underline: const SizedBox.shrink(),
+          items: _screenings
+              .map(
+                (s) => DropdownMenuItem(
+                  value: s.id,
+                  child: Text(
+                    s.title,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              )
+              .toList(),
+          onChanged: (id) {
+            if (id == null) return;
+            setState(() {
+              _selectedScreeningId = id;
+              _latestResult = null;
+              _processingScan = false;
+            });
+            unawaited(_refreshCounts(silent: true));
+          },
         ),
         const SizedBox(height: 5),
         Row(
           children: [
-            const Icon(Icons.movie_outlined, size: 15, color: _muted),
-            const SizedBox(width: 6),
-            const Text(
-              'Premiere screening',
-              style: TextStyle(color: _muted, fontSize: 13),
-            ),
-            const SizedBox(width: 10),
-            Container(
-              width: 3,
-              height: 3,
-              decoration: const BoxDecoration(
-                color: _muted,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 10),
             const Icon(Icons.schedule, size: 14, color: _muted),
             const SizedBox(width: 5),
-            const Text(
-              '7:30 PM',
-              style: TextStyle(color: _muted, fontSize: 13),
+            Text(
+              _formatDateTime(selected.startsAt),
+              style: const TextStyle(color: _muted, fontSize: 13),
             ),
+            const SizedBox(width: 10),
+            const Icon(Icons.location_on_outlined, size: 14, color: _muted),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(
+                selected.location,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _muted, fontSize: 13),
+              ),
+            ),
+            if (selected.cancelled)
+              const Text(
+                'CANCELLED',
+                style: TextStyle(
+                  color: _red,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
           ],
         ),
       ],
     );
   }
 
+  String _formatDateTime(DateTime value) {
+    final local = value.toLocal();
+    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final period = local.hour < 12 ? 'AM' : 'PM';
+    return '${local.day}/${local.month} · $hour:$minute $period';
+  }
+
   Widget _buildCheckInStats(double progress) {
+    final capacity = _capacity;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -303,6 +668,12 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 ),
               ),
               const Spacer(),
+              if (_isLive)
+                IconButton(
+                  onPressed: () => unawaited(_refreshCounts()),
+                  icon: const Icon(Icons.refresh, color: _muted, size: 18),
+                  tooltip: 'Refresh counts',
+                ),
               Text(
                 '$_checkedInCount',
                 style: const TextStyle(
@@ -311,7 +682,7 @@ class _CheckInScreenState extends State<CheckInScreen> {
                 ),
               ),
               Text(
-                ' / $_capacity',
+                ' / $capacity',
                 style: const TextStyle(color: _muted, fontSize: 13),
               ),
             ],
@@ -326,6 +697,16 @@ class _CheckInScreenState extends State<CheckInScreen> {
               valueColor: const AlwaysStoppedAnimation(_accent),
             ),
           ),
+          if (_isLive && _selectedScreening != null) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '${_selectedScreening!.soldCount} confirmed tickets · counts refresh every 20s',
+                style: const TextStyle(color: _muted, fontSize: 11),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -342,51 +723,161 @@ class _CheckInScreenState extends State<CheckInScreen> {
         border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       clipBehavior: Clip.antiAlias,
-      child: latestResult == null
-          ? Stack(
-              fit: StackFit.expand,
-              children: [
-                MobileScanner(controller: _scanner, onDetect: _onDetect),
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black.withValues(alpha: 0.22),
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.55),
-                      ],
+      child: switch (_camera) {
+        _CameraState.checking => const Center(
+            child: CircularProgressIndicator(color: _accent),
+          ),
+        _CameraState.denied => _buildPermissionPrompt(
+            title: 'Camera access needed',
+            body:
+                'Gatekeeper scans ticket QR codes with the camera. Allow access to start scanning.',
+            actionLabel: 'Allow camera access',
+            onAction: _requestCamera,
+          ),
+        _CameraState.blocked => _buildPermissionPrompt(
+            title: 'Camera access is off',
+            body:
+                'Camera permission was blocked. Enable it in the system Settings, then return here.',
+            actionLabel: 'Open Settings',
+            onAction: () async {
+              await openAppSettings();
+            },
+          ),
+        _CameraState.granted => latestResult == null
+            ? Stack(
+                fit: StackFit.expand,
+                children: [
+                  MobileScanner(
+                    controller: _scanner,
+                    onDetect: _onDetect,
+                    errorBuilder: (context, error) => _buildScannerError(
+                      'Scanner error (${error.errorCode}). Tap to retry.',
                     ),
                   ),
-                ),
-                Center(child: _buildScanFrame()),
-                const Positioned(
-                  top: 14,
-                  left: 14,
-                  child: _ScannerLabel(
-                    icon: Icons.center_focus_strong,
-                    label: 'SCAN TICKET QR',
-                  ),
-                ),
-                const Positioned(
-                  bottom: 14,
-                  left: 0,
-                  right: 0,
-                  child: Text(
-                    'Align the QR code inside the frame',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      shadows: [Shadow(blurRadius: 8, color: Colors.black)],
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.22),
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.55),
+                        ],
+                      ),
                     ),
                   ),
-                ),
-              ],
-            )
-          : _buildResult(latestResult),
+                  Center(child: _buildScanFrame()),
+                  const Positioned(
+                    top: 14,
+                    left: 14,
+                    child: _ScannerLabel(
+                      icon: Icons.center_focus_strong,
+                      label: 'SCAN TICKET QR',
+                    ),
+                  ),
+                  Positioned(
+                    top: 10,
+                    right: 10,
+                    child: IconButton(
+                      onPressed: () => unawaited(_scanner?.toggleTorch()),
+                      icon: const Icon(Icons.flashlight_on_outlined,
+                          color: Colors.white),
+                      tooltip: 'Toggle torch',
+                    ),
+                  ),
+                  const Positioned(
+                    bottom: 14,
+                    left: 0,
+                    right: 0,
+                    child: Text(
+                      'Align the QR code inside the frame',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        shadows: [Shadow(blurRadius: 8, color: Colors.black)],
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            : _buildResult(latestResult),
+      },
+    );
+  }
+
+  Widget _buildPermissionPrompt({
+    required String title,
+    required String body,
+    required String actionLabel,
+    required Future<void> Function() onAction,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.videocam_off_outlined, color: _accent, size: 37),
+          const SizedBox(height: 10),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            body,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: _muted, fontSize: 12),
+          ),
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: () => unawaited(onAction()),
+            icon: const Icon(Icons.camera_alt_outlined, size: 17),
+            label: Text(actionLabel),
+            style: FilledButton.styleFrom(
+              backgroundColor: _accent,
+              foregroundColor: Colors.black,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScannerError(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      color: _red.withValues(alpha: 0.06),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.error_outline, color: _red, size: 37),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: _resumeScanning,
+            icon: const Icon(Icons.refresh, size: 17),
+            label: const Text('Retry scanner'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white,
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.22)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

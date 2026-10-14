@@ -95,3 +95,43 @@ export function screeningIsBookable(screening: Screening, now = Date.now()): boo
     now < closesAt &&
     now < startsAt;
 }
+
+// ---- Shared ticketing seam (customer wallet + holds) ----
+// Same ticket contract as the door-staff app and the admin:
+// QR payload "marvelsyllabus://ticket/<orderCode>", manual entry "<orderCode>".
+
+export interface WalletBooking {
+  id: string;
+  orderCode: string;
+  screeningId: string;
+  titleId: string;
+  title: string;
+  startsAt: string;
+  endsAt: string;
+  location: string;
+  quantity: number;
+  amountMinor: number;
+  status: string;
+  ticketStatus: "valid" | "used" | "invalid";
+  qrValue: string;
+  createdAt: string;
+}
+
+export function ticketQrValue(orderCode: string) {
+  return `marvelsyllabus://ticket/${orderCode}`;
+}
+
+export function normalizeTicketCode(raw: string) {
+  const match = raw.trim().toUpperCase().match(/MSY-[A-Z0-9]{4}-[A-Z0-9]{4}/);
+  if (!match) throw new Error("invalid_code");
+  return match[0];
+}
+
+export const loadWallet = (token: string) =>
+  apiRequest<WalletBooking[]>("/api/bookings", token);
+
+export const createBookingHold = (token: string, screeningId: string, quantity = 1) =>
+  apiRequest<{ holdId: string; expiresAt: string }>("/api/booking-holds", token, {
+    method: "POST",
+    body: JSON.stringify({ screeningId, quantity }),
+  });

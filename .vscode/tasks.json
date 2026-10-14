@@ -1,0 +1,37 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Admin Panel: Vite dev server",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"--prefix",
+				"admin",
+				"run",
+				"dev",
+				"--",
+				"--host",
+				"127.0.0.1"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Prototype: Vite dev server",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"--prefix",
+				"prototype",
+				"run",
+				"dev",
+				"--",
+				"--host",
+				"127.0.0.1"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}
