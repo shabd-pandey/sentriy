@@ -18,38 +18,53 @@ test suite, one deployment story.
 
 ## Files
 
-- `backend/package.json` — manifest (deps: `@neondatabase/serverless`, `@aws-sdk/client-s3`,
-  `@aws-sdk/s3-request-presigner`; devDeps: TypeScript, vitest, PGlite for acceptance tests).
-- `backend/tsconfig.json` — strict TypeScript config mirroring the existing app configs.
-- `backend/src/worker.ts` — the canonical `onRequest` Pages Function (moved here from
-  `prototype/functions/api/[[path]].ts` once ticket 01 lands).
+- `backend/package.json` — manifest (deps: `@neondatabase/serverless`,
+  `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`; devDeps: TypeScript,
+  vitest, PGlite for acceptance tests).
+- `backend/tsconfig.json` — strict TypeScript config mirroring the existing app
+  configs.
+- `backend/src/worker.ts` — the canonical `onRequest` Pages Function, moved
+  here from `prototype/functions/api/[[path]].ts` (commit `f0b1a4d`).
 
-## Deployment (Cloudflare Pages Functions constraint)
-
-Cloudflare Pages Functions must live **inside each project's root directory**. So each Pages
-project keeps a thin re-export shim in its own `functions/api/[[path]].ts`:
+Both Pages projects keep thin re-export shims in their own `functions/` directory,
+because Cloudflare Pages Functions must live inside each project root:
 
 ```ts
 // prototype/functions/api/[[path]].ts
-export { onRequest } from "../../backend/src/worker";
+export { onRequest } from "../../../backend/src/worker";
 
 // admin/functions/api/[[path]].ts
-export { onRequest } from "../../backend/src/worker";
+export { onRequest } from "../../../backend/src/worker";
 ```
 
-Both Pages projects (`frame-catalog`, `marvelsyllabus-command-deck`) therefore serve byte-identical
-API behaviour from one source file.
+Both Pages projects (`frame-catalog`, `marvelsyllabus-command-deck`) therefore
+serve byte-identical API behaviour from one source file.
+
+## Local typechecking
+
+`backend/node_modules` is a local junction to `prototype/node_modules` so
+`tsc` can resolve `@neondatabase/serverless` etc. from `backend/src/worker.ts`.
+It is gitignored and not part of the repository.
 
 ## Environment variables (set on both Pages projects)
 
-`DATABASE_URL`, `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_BUCKET`,
-`OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `CLERK_ISSUER`,
-`CLERK_JWKS_URL`, `CLERK_AUDIENCE` (optional).
+`DATABASE_URL`, `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`,
+`OBJECT_STORAGE_BUCKET`, `OBJECT_STORAGE_ACCESS_KEY_ID`,
+`OBJECT_STORAGE_SECRET_ACCESS_KEY`, `CLERK_ISSUER`, `CLERK_JWKS_URL`,
+`CLERK_AUDIENCE` (optional), `OWNER_EMAILS` (optional allowlist).
 
 ## Roadmap status
 
-`backend/src/worker.ts` does not exist yet. Ticket `01-runnable-platform-foundation` is
-implementing the worker's auth/role enforcement and the acceptance-test harness against the current
-`prototype/functions/api/[[path]].ts`. When ticket 01 merges to `integration/movie-ticketing-platform`,
-the worker will be moved here verbatim and the shims created. Tickets 02–10 then extend
-`backend/src/worker.ts` directly.
+`backend/src/worker.ts` exists. Tickets 02–10 extend it directly:
+
+- 02 catalog titles and customer catalog ← blocked by 01 ✅ unblocked
+- 03 screenings ← blocked by 02
+- 04 inventory holds and test checkout ← blocked by 03
+- 05 verified payment and customer ticket wallet ← blocked by 04
+- 06 staff ticket check-in ← blocked by 05
+- 07 screening changes, refunds, customer updates ← blocked by 05
+- 08 promotional banners ← blocked by 01 ✅ unblocked
+- 09 admin activity dashboard ← blocked by 02, 03, 05, 06, 07, 08
+- 10 encrypted backup and restore ← blocked by 02, 03, 05, 07, 08
+
+Next frontier: tickets **02** and **08** (both unblocked by 01).
