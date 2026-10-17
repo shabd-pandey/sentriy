@@ -44,7 +44,7 @@ vi.mock("@neondatabase/serverless", () => ({
   },
 }));
 
-import { onRequest } from "../../functions/api/[[path]]";
+import { onRequest } from "../../../backend/src/worker";
 
 export { createTestDatabase, applyMigrations, truncateAllTables, MIGRATIONS_DIR } from "./database";
 export * from "./tokens";
