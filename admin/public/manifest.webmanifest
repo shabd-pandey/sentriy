@@ -1,0 +1,10 @@
+{
+  "name": "MarvelSyllabus Command Deck",
+  "short_name": "Command Deck",
+  "description": "Operator workspace for the MarvelSyllabus shared catalog, screenings, bookings, banners, rewards, and activity.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#211f1b",
+  "theme_color": "#211f1b",
+  "icons": []
+}

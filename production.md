@@ -112,11 +112,12 @@ BACKUP_RESTORE_KEY            # only in the protected recovery environment
 ## 4. Push the server live (database → API → web apps)
 
 ```powershell
-# 1. Migrate Neon (order matters; 003 adds the ticket/check-in contract)
+# 1. Migrate Neon (order matters; 003 adds the ticket/check-in contract, 004 the full-access admin categories)
 cd prototype
 psql "$env:DATABASE_URL" -f db/001_catalog.sql
 psql "$env:DATABASE_URL" -f db/002_admin.sql
 psql "$env:DATABASE_URL" -f db/003_tickets.sql
+psql "$env:DATABASE_URL" -f db/004_admin_full_access.sql
 ```
 
 ```powershell

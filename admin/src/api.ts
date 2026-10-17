@@ -57,7 +57,7 @@ export interface Banner {
   createdAt: string;
 }
 
-export type ActivityCategory = "catalog" | "screening" | "artwork" | "settings" | "banner" | "reward";
+export type ActivityCategory = "catalog" | "screening" | "artwork" | "settings" | "banner" | "reward" | "booking" | "ticket" | "system";
 
 export interface ActivityEntry {
   id: string;
@@ -208,6 +208,12 @@ export const saveCatalogTitle = (token: string, id: string | null, draft: Catalo
     ? adminRequest<{ ok: boolean }>(`/api/admin/catalog/${encodeURIComponent(id)}`, token, { method: "PUT", body: JSON.stringify(draft) })
     : adminRequest<{ id: string }>(`/api/admin/catalog`, token, { method: "POST", body: JSON.stringify(draft) });
 
+export const deleteCatalogTitle = (token: string, id: string) =>
+  adminRequest<{ ok: boolean }>(`/api/admin/catalog/${encodeURIComponent(id)}`, token, { method: "DELETE" });
+
+export const importCatalog = (token: string, entries: Array<{ id: string; title: string; titleType: string; synopsis?: string; releaseYear?: number; watchOrder: number }>) =>
+  adminRequest<{ imported: number }>(`/api/admin/catalog/import`, token, { method: "POST", body: JSON.stringify({ entries }) });
+
 export const reorderCatalog = (token: string, ids: string[]) =>
   adminRequest<{ ok: boolean }>("/api/admin/catalog/order", token, { method: "PUT", body: JSON.stringify({ ids }) });
 
@@ -226,6 +232,23 @@ export const createScreening = (token: string, draft: ScreeningDraft) =>
 
 export const setScreeningCancelled = (token: string, id: string, cancelled: boolean) =>
   adminRequest<{ ok: boolean; cancelled: boolean }>(`/api/admin/screenings/${id}`, token, { method: "PUT", body: JSON.stringify({ cancelled }) });
+
+export interface ScreeningPatch {
+  location?: string;
+  startsAt?: string;
+  endsAt?: string;
+  capacity?: number;
+  priceMinor?: number;
+  salesOpenAt?: string | null;
+  salesCloseAt?: string | null;
+  cancelled?: boolean;
+}
+
+export const updateScreening = (token: string, id: string, patch: ScreeningPatch) =>
+  adminRequest<{ ok: boolean; cancelled: boolean }>(`/api/admin/screenings/${id}`, token, { method: "PUT", body: JSON.stringify(patch) });
+
+export const deleteScreening = (token: string, id: string) =>
+  adminRequest<{ ok: boolean }>(`/api/admin/screenings/${id}`, token, { method: "DELETE" });
 
 export const saveBanner = (token: string, id: string | null, draft: BannerDraft) =>
   id
@@ -318,10 +341,75 @@ export const checkInStaffTicket = (token: string, code: string) =>
   });
 
 export const loadAdminBookings = (token: string, screeningId?: string) =>
-  apiRequest<StaffTicket[]>(
+  apiRequest<AdminBooking[]>(
     screeningId ? `/api/admin/bookings?screeningId=${encodeURIComponent(screeningId)}` : "/api/admin/bookings",
     token,
   );
+
+export interface AdminBooking {
+  id: string;
+  orderCode: string;
+  screeningId?: string;
+  titleId?: string;
+  title?: string;
+  userId: string;
+  quantity: number;
+  amountMinor?: number;
+  status: string;
+  ticketStatus: string;
+  checkedInAt?: string | null;
+  createdAt: string;
+}
+
+export interface BookingHold {
+  id: string;
+  screeningId: string;
+  title?: string;
+  userId: string;
+  quantity: number;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface CheckinRecord {
+  id: string;
+  bookingId: string;
+  orderCode: string;
+  staffSub: string;
+  result: string;
+  createdAt: string;
+}
+
+export interface AdminOverview {
+  titles: number;
+  upcomingScreenings: number;
+  bookings: number;
+  revenueMinor: number;
+  activeHolds: number;
+  checkins24h: number;
+  activeCampaigns: number;
+}
+
+export const loadAdminHolds = (token: string, screeningId?: string) =>
+  apiRequest<BookingHold[]>(
+    screeningId ? `/api/admin/holds?screeningId=${encodeURIComponent(screeningId)}` : "/api/admin/holds",
+    token,
+  );
+
+export const releaseHold = (token: string, holdId: string) =>
+  adminRequest<{ ok: boolean }>(`/api/admin/holds/${holdId}`, token, { method: "DELETE" });
+
+export const refundBooking = (token: string, bookingId: string) =>
+  adminRequest<{ ok: boolean; status: string }>(`/api/admin/bookings/${bookingId}/refund`, token, { method: "POST" });
+
+export const cancelBooking = (token: string, bookingId: string) =>
+  adminRequest<{ ok: boolean; status: string }>(`/api/admin/bookings/${bookingId}/cancel`, token, { method: "POST" });
+
+export const loadCheckins = (token: string, screeningId: string) =>
+  apiRequest<CheckinRecord[]>(`/api/admin/checkins?screeningId=${encodeURIComponent(screeningId)}`, token);
+
+export const loadOverview = (token: string) =>
+  apiRequest<AdminOverview>("/api/admin/overview", token);
 
 export function money(minor: number) {
   return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(minor / 100);

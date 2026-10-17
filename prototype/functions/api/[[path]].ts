@@ -144,7 +144,7 @@ const artworkKey = (value: unknown) => {
 type Db = ReturnType<typeof neon>;
 const recordActivity = async (db: Db, meta: {
   actor: string;
-  category: "catalog" | "screening" | "artwork" | "settings" | "banner" | "reward";
+  category: "catalog" | "screening" | "artwork" | "settings" | "banner" | "reward" | "booking" | "ticket" | "system";
   summary: string;
   screeningId?: string | null;
   bannerId?: string | null;
@@ -317,7 +317,7 @@ async function route({ request, env }: PagesContext): Promise<Response> {
   if (request.method === "PUT" && path.startsWith("/api/admin/catalog/")) {
     const admin = await authenticatedUser(request, env, true);
     const id = titlePath(url);
-    const body = await parseBody<{ title: string; synopsis: string; releaseYear: number | null; posterKey: string | null; active: boolean; watchOrder: number }>(request);
+    const body = await parseBody<{ title: string; titleType?: "film" | "series"; synopsis: string; releaseYear: number | null; posterKey: string | null; active: boolean; watchOrder: number }>(request);
     if (body.posterKey !== null && !/^artwork\/[a-zA-Z0-9-]+\.(jpg|png|webp)$/.test(body.posterKey)) {
       return json({ error: "invalid_poster_key" }, 400);
     }
@@ -334,6 +334,20 @@ async function route({ request, env }: PagesContext): Promise<Response> {
       return json({ ok: true });
     }
     return json({ error: "not_found" }, 404);
+  }
+
+  if (request.method === "DELETE" && path.startsWith("/api/admin/catalog/")) {
+    const admin = await authenticatedUser(request, env, true);
+    const id = titlePath(url);
+    const [usage] = await db`
+      SELECT (SELECT count(*)::integer FROM screenings WHERE title_id = ${id}) AS screenings,
+        (SELECT count(*)::integer FROM series_seasons WHERE title_id = ${id}) AS seasons
+    `;
+    if (usage && usage.screenings > 0) return json({ error: "title_has_screenings" }, 409);
+    const [removed] = await db`DELETE FROM catalog_titles WHERE id = ${id} RETURNING title`;
+    if (!removed) return json({ error: "not_found" }, 404);
+    await recordActivity(db, { actor: admin.sub, category: "catalog", summary: `Deleted catalog title "${removed.title}"` });
+    return json({ ok: true });
   }
 
   if (request.method === "POST" && path === "/api/admin/artwork") {
@@ -437,19 +451,71 @@ async function route({ request, env }: PagesContext): Promise<Response> {
   if (request.method === "PUT" && path.startsWith("/api/admin/screenings/")) {
     const admin = await authenticatedUser(request, env, true);
     const screeningId = uuidParameter(titlePath(url));
-    const body = await parseBody<{ cancelled?: boolean }>(request);
+    const body = await parseBody<{
+      cancelled?: boolean; location?: string; startsAt?: string; endsAt?: string;
+      capacity?: number; priceMinor?: number; salesOpenAt?: string | null;
+      salesCloseAt?: string | null;
+    }>(request);
+    const [current] = await db`SELECT id, title_id AS "titleId" FROM screenings WHERE id = ${screeningId}`;
+    if (!current) return json({ error: "not_found" }, 404);
+    const patchKeys = Object.keys(body ?? {});
+    if (patchKeys.length === 1 && typeof body.cancelled === "boolean") {
+      const [screening] = await db`
+        UPDATE screenings SET cancelled = ${body.cancelled === true}, updated_at = now()
+        WHERE id = ${screeningId} RETURNING id, cancelled
+      `;
+      await recordActivity(db, {
+        actor: admin.sub,
+        category: "screening",
+        summary: screening.cancelled ? `Cancelled screening ${screeningId}` : `Reopened cancelled screening ${screeningId}`,
+        screeningId,
+      });
+      return json({ ok: true, cancelled: screening.cancelled });
+    }
+    const location = body.location == null ? undefined : requiredText(body.location, "location");
+    const startsAt = body.startsAt == null ? undefined : new Date(body.startsAt).toISOString();
+    const endsAt = body.endsAt == null ? undefined : new Date(body.endsAt).toISOString();
+    if (startsAt && Number.isNaN(Date.parse(startsAt))) return json({ error: "invalid_schedule" }, 400);
+    if (endsAt && Number.isNaN(Date.parse(endsAt))) return json({ error: "invalid_schedule" }, 400);
+    if (startsAt && endsAt && Date.parse(endsAt) <= Date.parse(startsAt)) return json({ error: "invalid_schedule" }, 400);
+    const capacity = body.capacity == null ? undefined : positiveInteger(body.capacity, "capacity");
+    const priceMinor = body.priceMinor == null ? undefined : (() => {
+      if (!Number.isInteger(body.priceMinor) || (body.priceMinor as number) < 0) throw new Error("invalid_price");
+      return body.priceMinor as number;
+    })();
     const [screening] = await db`
-      UPDATE screenings SET cancelled = ${body.cancelled === true}, updated_at = now()
+      UPDATE screenings SET
+        location = COALESCE(${location ?? null}, location),
+        starts_at = COALESCE(${startsAt ?? null}::timestamptz, starts_at),
+        ends_at = COALESCE(${endsAt ?? null}::timestamptz, ends_at),
+        capacity = COALESCE(${capacity ?? null}, capacity),
+        price_minor = COALESCE(${priceMinor ?? null}, price_minor),
+        cancelled = COALESCE(${typeof body.cancelled === "boolean" ? body.cancelled : null}, cancelled),
+        updated_at = now()
       WHERE id = ${screeningId} RETURNING id, cancelled
     `;
-    if (!screening) return json({ error: "not_found" }, 404);
-    await recordActivity(db, {
-      actor: admin.sub,
-      category: "screening",
-      summary: screening.cancelled ? `Cancelled screening ${screeningId}` : `Reopened cancelled screening ${screeningId}`,
-      screeningId,
-    });
+    if (body.salesOpenAt !== undefined || body.salesCloseAt !== undefined) {
+      await db`UPDATE screenings SET
+        sales_open_at = ${body.salesOpenAt ? new Date(body.salesOpenAt).toISOString() : null}::timestamptz,
+        sales_close_at = ${body.salesCloseAt ? new Date(body.salesCloseAt).toISOString() : null}::timestamptz,
+        updated_at = now() WHERE id = ${screeningId}`;
+    }
+    await recordActivity(db, { actor: admin.sub, category: "screening", summary: `Updated screening ${screeningId}`, screeningId });
     return json({ ok: true, cancelled: screening.cancelled });
+  }
+
+  if (request.method === "DELETE" && path.startsWith("/api/admin/screenings/")) {
+    const admin = await authenticatedUser(request, env, true);
+    const screeningId = uuidParameter(titlePath(url));
+    const [usage] = await db`
+      SELECT (SELECT count(*)::integer FROM bookings WHERE screening_id = ${screeningId} AND status = 'confirmed') AS confirmed,
+        (SELECT count(*)::integer FROM booking_holds WHERE screening_id = ${screeningId} AND expires_at > now()) AS held
+    `;
+    if (usage && (usage.confirmed > 0 || usage.held > 0)) return json({ error: "screening_has_bookings" }, 409);
+    const [removed] = await db`DELETE FROM screenings WHERE id = ${screeningId} RETURNING id`;
+    if (!removed) return json({ error: "not_found" }, 404);
+    await recordActivity(db, { actor: admin.sub, category: "screening", summary: `Deleted screening ${screeningId}` });
+    return json({ ok: true });
   }
 
   if (request.method === "GET" && path === "/api/banners") {
@@ -842,17 +908,98 @@ async function route({ request, env }: PagesContext): Promise<Response> {
     const screeningId = url.searchParams.get("screeningId");
     const rows = screeningId
       ? await db`
-        SELECT b.order_code AS "orderCode", b.quantity, b.status,
+        SELECT b.id, b.order_code AS "orderCode", b.user_id AS "userId", b.quantity,
+          b.amount_minor AS "amountMinor", b.status,
           b.ticket_status AS "ticketStatus", b.checked_in_at AS "checkedInAt",
           b.created_at AS "createdAt"
         FROM bookings b WHERE b.screening_id = ${uuidParameter(screeningId)}
         ORDER BY b.created_at DESC LIMIT 500`
       : await db`
-        SELECT b.order_code AS "orderCode", b.screening_id AS "screeningId",
-          b.quantity, b.status, b.ticket_status AS "ticketStatus",
+        SELECT b.id, b.order_code AS "orderCode", b.screening_id AS "screeningId",
+          s.title_id AS "titleId", t.title, b.user_id AS "userId", b.quantity,
+          b.amount_minor AS "amountMinor", b.status, b.ticket_status AS "ticketStatus",
           b.created_at AS "createdAt"
-        FROM bookings b ORDER BY b.created_at DESC LIMIT 100`;
+        FROM bookings b JOIN screenings s ON s.id = b.screening_id
+        JOIN catalog_titles t ON t.id = s.title_id
+        ORDER BY b.created_at DESC LIMIT 200`;
     return json(rows);
+  }
+
+  if (request.method === "POST" && path.match(/^\/api\/admin\/bookings\/[0-9a-f-]+\/(refund|cancel)$/)) {
+    const admin = await authenticatedUser(request, env, true);
+    const segments = path.split("/").filter(Boolean);
+    const bookingId = uuidParameter(segments[3]);
+    const action = segments[4];
+    const [booking] = await db`SELECT id, screening_id AS "screeningId", status FROM bookings WHERE id = ${bookingId}`;
+    if (!booking) return json({ error: "not_found" }, 404);
+    const next = action === "refund" ? "refunded" : "failed";
+    const [updated] = await db`
+      UPDATE bookings SET status = ${next}, ticket_status = 'invalid', updated_at = now()
+      WHERE id = ${bookingId} RETURNING id, status
+    `;
+    await recordActivity(db, {
+      actor: admin.sub, category: "booking",
+      summary: `${action === "refund" ? "Refunded" : "Cancelled"} booking ${bookingId}`,
+      screeningId: booking.screeningId, orderRef: bookingId,
+    });
+    return json({ ok: true, status: updated.status });
+  }
+
+  if (request.method === "GET" && path === "/api/admin/holds") {
+    await authenticatedUser(request, env, true);
+    const screeningId = url.searchParams.get("screeningId");
+    const rows = screeningId
+      ? await db`
+        SELECT h.id, h.screening_id AS "screeningId", h.user_id AS "userId", h.quantity,
+          h.expires_at AS "expiresAt", h.created_at AS "createdAt"
+        FROM booking_holds h WHERE h.screening_id = ${uuidParameter(screeningId)} AND h.expires_at > now()
+        ORDER BY h.created_at DESC LIMIT 200`
+      : await db`
+        SELECT h.id, h.screening_id AS "screeningId", t.title, h.user_id AS "userId", h.quantity,
+          h.expires_at AS "expiresAt", h.created_at AS "createdAt"
+        FROM booking_holds h JOIN screenings s ON s.id = h.screening_id
+        JOIN catalog_titles t ON t.id = s.title_id
+        WHERE h.expires_at > now() ORDER BY h.created_at DESC LIMIT 200`;
+    return json(rows);
+  }
+
+  if (request.method === "DELETE" && path.startsWith("/api/admin/holds/")) {
+    const admin = await authenticatedUser(request, env, true);
+    const holdId = uuidParameter(titlePath(url));
+    const [hold] = await db`DELETE FROM booking_holds WHERE id = ${holdId} RETURNING screening_id AS "screeningId"`;
+    if (!hold) return json({ error: "not_found" }, 404);
+    await recordActivity(db, { actor: admin.sub, category: "booking", summary: `Released booking hold ${holdId}`, screeningId: hold.screeningId });
+    return json({ ok: true });
+  }
+
+  if (request.method === "GET" && path === "/api/admin/checkins") {
+    await authenticatedUser(request, env, true);
+    const screeningId = url.searchParams.get("screeningId");
+    if (!screeningId) return json({ error: "invalid_screening_id" }, 400);
+    const rows = await db`
+      SELECT c.id, c.booking_id AS "bookingId", b.order_code AS "orderCode",
+        c.staff_sub AS "staffSub", c.result, c.created_at AS "createdAt"
+      FROM ticket_checkins c JOIN bookings b ON b.id = c.booking_id
+      WHERE c.screening_id = ${uuidParameter(screeningId)}
+      ORDER BY c.created_at DESC LIMIT 500`;
+    return json(rows);
+  }
+
+  if (request.method === "GET" && path === "/api/admin/overview") {
+    await authenticatedUser(request, env, true);
+    const [[titles], [screenings], [bookings], [holds], [checkins], [campaigns]] = await Promise.all([
+      db`SELECT count(*)::integer AS value FROM catalog_titles`,
+      db`SELECT count(*)::integer AS value FROM screenings WHERE starts_at > now() - interval '12 hours'`,
+      db`SELECT count(*)::integer AS value, COALESCE(sum(CASE WHEN status = 'confirmed' THEN amount_minor ELSE 0 END), 0)::bigint AS revenue FROM bookings`,
+      db`SELECT count(*)::integer AS value FROM booking_holds WHERE expires_at > now()`,
+      db`SELECT count(*)::integer AS value FROM ticket_checkins WHERE created_at > now() - interval '24 hours'`,
+      db`SELECT count(*)::integer AS value FROM reward_campaigns WHERE status = 'active'`,
+    ]);
+    return json({
+      titles: titles.value, upcomingScreenings: screenings.value,
+      bookings: bookings.value, revenueMinor: Number(bookings.revenue),
+      activeHolds: holds.value, checkins24h: checkins.value, activeCampaigns: campaigns.value,
+    });
   }
 
   return json({ error: "not_found" }, 404);

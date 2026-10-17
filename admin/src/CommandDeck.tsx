@@ -3,6 +3,8 @@ import {
   remainingCapacity,
   screeningStatus,
   sortCatalog,
+  money,
+  normalizeTicketCode,
   loadActivity as fetchActivity,
   loadBanners as fetchBanners,
   loadCampaignCodes as fetchCampaignCodes,
@@ -15,6 +17,9 @@ import {
   createScreening as createScreeningRemote,
   deleteBanner as deleteBannerRemote,
   deleteCampaignCode as deleteCampaignCodeRemote,
+  deleteCatalogTitle as deleteCatalogTitleRemote,
+  deleteScreening as deleteScreeningRemote,
+  updateScreening as updateScreeningRemote,
   reorderCatalog as reorderCatalogRemote,
   saveCatalogTitle as saveCatalogTitleRemote,
   saveBanner as saveBannerRemote,
@@ -24,15 +29,33 @@ import {
   setScreeningCancelled as setScreeningCancelledRemote,
   updateCampaign as updateCampaignRemote,
   uploadArtwork as uploadArtworkRemote,
+  loadAdminBookings as fetchAdminBookings,
+  loadAdminHolds as fetchAdminHolds,
+  loadCheckins as fetchCheckins,
+  loadOverview as fetchOverview,
+  loadStaffScreenings as fetchStaffScreenings,
+  validateStaffTicket as validateStaffTicketRemote,
+  checkInStaffTicket as checkInStaffTicketRemote,
+  refundBooking as refundBookingRemote,
+  cancelBooking as cancelBookingRemote,
+  releaseHold as releaseHoldRemote,
+  importCatalog as importCatalogRemote,
+  type AdminBooking,
+  type AdminOverview,
   type BannerAccent,
+  type BookingHold,
   type CampaignCode,
   type CampaignEntrant,
+  type CheckinRecord,
 } from "./api";
 import {
   addCampaignCodes,
   addScreening,
   deleteBanner,
   deleteCampaignCode,
+  deleteScreening as deleteScreeningLocal,
+  deleteTitle as deleteTitleLocal,
+  updateScreening as updateScreeningLocal,
   loadAdminSnapshot,
   persistAdminSnapshot,
   resetAdminData,
@@ -51,20 +74,23 @@ import {
   type TitleDraft,
 } from "./admin-data";
 
-type TabId = "activity" | "catalog" | "screenings" | "banners" | "rewards" | "settings";
+type TabId = "activity" | "catalog" | "screenings" | "bookings" | "banners" | "rewards" | "settings" | "system";
 
 export interface LiveStore {
   token: string;
   refresh: () => Promise<void>;
 }
 
-const categoryClass: Record<AdminSnapshot["activity"][number]["category"], string> = {
+const categoryClass: Record<string, string> = {
   catalog: "cat-catalog",
   screening: "cat-screening",
   artwork: "cat-artwork",
   settings: "cat-settings",
   banner: "cat-banner",
   reward: "cat-reward",
+  booking: "cat-booking",
+  ticket: "cat-ticket",
+  system: "cat-system",
 };
 
 const categoryLabel: Record<string, string> = {
@@ -74,6 +100,9 @@ const categoryLabel: Record<string, string> = {
   settings: "Settings",
   banner: "Banner",
   reward: "Reward",
+  booking: "Booking",
+  ticket: "Ticket",
+  system: "System",
 };
 
 function timeAgo(iso: string) {
@@ -313,9 +342,11 @@ export default function CommandDeck({ authConfigured = false, signedIn = false, 
               ["activity", "Activity", "01"],
               ["catalog", "Catalog", "02"],
               ["screenings", "Screenings", "03"],
-              ["banners", "Banners", "04"],
-              ["rewards", "Rewards", "05"],
-              ["settings", "Settings", "06"],
+              ["bookings", "Bookings", "04"],
+              ["banners", "Banners", "05"],
+              ["rewards", "Rewards", "06"],
+              ["settings", "Settings", "07"],
+              ["system", "System", "08"],
             ] as const).map(([id, label, number]) => {
               const count = id === "activity" ? activityToday
                 : id === "catalog" ? snapshot.catalog.length
@@ -338,9 +369,11 @@ export default function CommandDeck({ authConfigured = false, signedIn = false, 
         {tab === "activity" && <ActivityTab snapshot={snapshot} clock={clock} live={live} onOpenScreenings={() => setTab("screenings")} onOpenCatalog={() => setTab("catalog")} />}
         {tab === "catalog" && <CatalogTab snapshot={snapshot} orderedCatalog={orderedCatalog} onCommit={commit} live={live} />}
         {tab === "screenings" && <ScreeningsTab snapshot={snapshot} orderedCatalog={orderedCatalog} onCommit={commit} live={live} />}
+        {tab === "bookings" && <BookingsTab snapshot={snapshot} live={live} />}
         {tab === "banners" && <BannersTab snapshot={snapshot} orderedCatalog={orderedCatalog} onCommit={commit} live={live} />}
         {tab === "rewards" && <RewardsTab snapshot={snapshot} onCommit={commit} live={live} />}
         {tab === "settings" && <SettingsTab snapshot={snapshot} onCommit={commit} live={live} />}
+        {tab === "system" && <SystemTab snapshot={snapshot} onCommit={commit} live={live} />}
       </main>
 
       <footer className="cd-footer">
@@ -356,6 +389,7 @@ function ActivityTab({ snapshot, clock, live, onOpenScreenings, onOpenCatalog }:
   const [category, setCategory] = useState<string>("all");
   const [lastRefresh, setLastRefresh] = useState(Date.now());
   const [refreshError, setRefreshError] = useState("");
+  const [overview, setOverview] = useState<AdminOverview | null>(null);
   useEffect(() => {
     if (!live) {
       const timer = window.setInterval(() => setLastRefresh(Date.now()), 15000);
@@ -367,7 +401,12 @@ function ActivityTab({ snapshot, clock, live, onOpenScreenings, onOpenCatalog }:
         () => { if (!cancelled) { setLastRefresh(Date.now()); setRefreshError(""); } },
         () => { if (!cancelled) setRefreshError("Live refresh failed. Retrying."); },
       );
+      void fetchOverview(live.token).then(
+        (data) => { if (!cancelled) setOverview(data); },
+        () => { /* overview is best-effort; stat cards already render from snapshot */ },
+      );
     };
+    poll();
     const timer = window.setInterval(poll, 20000);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [live]);
@@ -388,17 +427,19 @@ function ActivityTab({ snapshot, clock, live, onOpenScreenings, onOpenCatalog }:
       {refreshError && <div className="cd-error" role="alert">{refreshError}</div>}
 
       <div className="cd-stat-grid">
-        <StatCard label="Titles" value={snapshot.catalog.length} hint={`${snapshot.catalog.filter((title) => title.active).length} active`} onClick={onOpenCatalog} />
+        <StatCard label="Titles" value={overview?.titles ?? snapshot.catalog.length} hint={`${snapshot.catalog.filter((title) => title.active).length} active`} onClick={onOpenCatalog} />
         <StatCard label="Screenings on sale" value={screeningsOnSale(snapshot, clock)} hint={`${snapshot.screenings.filter((item) => item.cancelled).length} cancelled`} onClick={onOpenScreenings} />
+        <StatCard label="Bookings" value={overview?.bookings ?? snapshot.campaigns.reduce((sum, campaign) => sum + campaign.grantedCount, 0)} hint={overview ? `${money(overview.revenueMinor)} confirmed revenue · ${overview.activeHolds} live holds` : "revenue visible when live"} onClick={() => undefined} />
+        <StatCard label="Doors (24h)" value={overview?.checkins24h ?? 0} hint={overview ? `${overview.upcomingScreenings} upcoming screenings` : "live door counts when signed in"} onClick={() => undefined} />
         <StatCard label="Published banners" value={snapshot.banners.filter((banner) => banner.state === "published").length} hint={`${snapshot.banners.length} total`} onClick={() => undefined} />
-        <StatCard label="Active campaigns" value={snapshot.campaigns.filter((campaign) => campaign.status === "active").length} hint={`${snapshot.campaigns.reduce((sum, campaign) => sum + campaign.grantedCount, 0)} rewards granted`} onClick={() => undefined} />
+        <StatCard label="Active campaigns" value={overview?.activeCampaigns ?? snapshot.campaigns.filter((campaign) => campaign.status === "active").length} hint={`${snapshot.campaigns.reduce((sum, campaign) => sum + campaign.grantedCount, 0)} rewards granted`} onClick={() => undefined} />
       </div>
 
       <div className="cd-toolbar">
         <label className="cd-search"><span aria-hidden="true">⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search activity, actors, or references" /></label>
         <div className="cd-filter">
           <button type="button" className={category === "all" ? "is-active" : ""} onClick={() => setCategory("all")}>All</button>
-          {(["catalog", "screening", "banner", "reward", "artwork", "settings"] as const).map((name) => (
+          {(["catalog", "screening", "banner", "reward", "artwork", "settings", "booking", "ticket", "system"] as const).map((name) => (
             <button key={name} type="button" className={category === name ? "is-active" : ""} onClick={() => setCategory(name)}>{categoryLabel[name]}</button>
           ))}
         </div>
@@ -543,6 +584,26 @@ function CatalogTab({ snapshot, orderedCatalog, onCommit, live }: { snapshot: Ad
     setNotice(`${title.title} is now ${title.active ? "Upcoming" : "Active"}.`);
   };
 
+  const removeTitle = (title: ReturnType<typeof sortCatalog>[number]) => {
+    if (snapshot.screenings.some((item) => item.titleId === title.id)) {
+      setError(`"${title.title}" still has scheduled screenings. Delete or reassign those screenings first.`);
+      return;
+    }
+    if (!window.confirm(`Delete "${title.title}" from the catalog? This cannot be undone.`)) return;
+    if (live) {
+      setSaving(true);
+      setError("");
+      void deleteCatalogTitleRemote(live.token, title.id)
+        .then(() => live.refresh())
+        .then(() => setNotice(`"${title.title}" deleted from the shared catalog.`))
+        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Delete failed."))
+        .finally(() => setSaving(false));
+      return;
+    }
+    onCommit(deleteTitleLocal(snapshot, title.id));
+    setNotice(`"${title.title}" deleted from the preview catalog.`);
+  };
+
   const uploadPoster = async (file?: File) => {
     if (!file || !editing) return;
     if (!rights) { setError("Confirm you own or have licensed the artwork before uploading it."); return; }
@@ -605,6 +666,7 @@ function CatalogTab({ snapshot, orderedCatalog, onCommit, live }: { snapshot: Ad
               <button type="button" className="cd-mini" onClick={() => toggleActive(title)}>{title.active ? "Upcoming" : "Activate"}</button>
               <button type="button" className="cd-mini" onClick={() => move(index, -1)} disabled={index === 0} aria-label="Move up">↑</button>
               <button type="button" className="cd-mini" onClick={() => move(index, 1)} disabled={index === orderedCatalog.length - 1} aria-label="Move down">↓</button>
+              <button type="button" className="cd-mini danger" disabled={saving} onClick={() => removeTitle(title)}>Delete</button>
             </span>
           </div>
         ))}
@@ -631,7 +693,7 @@ function CatalogTab({ snapshot, orderedCatalog, onCommit, live }: { snapshot: Ad
   );
 }
 
-type ScreeningForm = { titleId: string; seasonNumber: string; episodeStart: string; episodeEnd: string; startsAt: string; endsAt: string; location: string; capacity: string; price: string };
+type ScreeningForm = { titleId: string; seasonNumber: string; episodeStart: string; episodeEnd: string; startsAt: string; endsAt: string; location: string; capacity: string; price: string; salesOpenAt: string; salesCloseAt: string };
 
 const emptyScreeningForm = (): ScreeningForm => ({
   titleId: "",
@@ -643,10 +705,20 @@ const emptyScreeningForm = (): ScreeningForm => ({
   location: "",
   capacity: "100",
   price: "0",
+  salesOpenAt: "",
+  salesCloseAt: "",
 });
+
+const toLocalInput = (iso: string | null) => {
+  if (!iso) return "";
+  const date = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
 
 function ScreeningsTab({ snapshot, orderedCatalog, onCommit, live }: { snapshot: AdminSnapshot; orderedCatalog: ReturnType<typeof sortCatalog>; onCommit: (next: AdminSnapshot) => void; live: LiveStore | null }) {
   const [form, setForm] = useState<ScreeningForm | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -701,11 +773,86 @@ function ScreeningsTab({ snapshot, orderedCatalog, onCommit, live }: { snapshot:
     onCommit(toggleScreeningCancelled(snapshot, id, cancelled));
   };
 
+  const saveEdit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!form || !editingId || saving) return;
+    const patch = {
+      location: form.location,
+      startsAt: form.startsAt ? new Date(form.startsAt).toISOString() : undefined,
+      endsAt: form.endsAt ? new Date(form.endsAt).toISOString() : undefined,
+      capacity: Number(form.capacity),
+      priceMinor: Math.round(Number(form.price) * 100),
+      salesOpenAt: form.salesOpenAt ? new Date(form.salesOpenAt).toISOString() : null,
+      salesCloseAt: form.salesCloseAt ? new Date(form.salesCloseAt).toISOString() : null,
+    };
+    if (live) {
+      setSaving(true);
+      setError("");
+      void updateScreeningRemote(live.token, editingId, patch)
+        .then(() => live.refresh())
+        .then(() => {
+          setForm(null);
+          setEditingId(null);
+          setNotice("Screening updated in the shared backend.");
+        })
+        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Update failed."))
+        .finally(() => setSaving(false));
+      return;
+    }
+    onCommit(updateScreeningLocal(snapshot, editingId, {
+      location: patch.location,
+      startsAt: patch.startsAt,
+      endsAt: patch.endsAt,
+      capacity: patch.capacity,
+      priceMinor: patch.priceMinor,
+      salesOpenAt: patch.salesOpenAt,
+      salesCloseAt: patch.salesCloseAt,
+    }));
+    setForm(null);
+    setEditingId(null);
+    setNotice("Screening updated.");
+  };
+
+  const remove = (id: string, title: string) => {
+    if (!window.confirm(`Delete the ${title} screening? Only screenings without confirmed bookings or live holds can be deleted.`)) return;
+    if (live) {
+      setSaving(true);
+      setError("");
+      void deleteScreeningRemote(live.token, id)
+        .then(() => live.refresh())
+        .then(() => setNotice("Screening deleted from the shared backend."))
+        .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Delete failed — it may still have bookings or holds."))
+        .finally(() => setSaving(false));
+      return;
+    }
+    onCommit(deleteScreeningLocal(snapshot, id));
+    setNotice("Screening deleted from the preview catalog.");
+  };
+
+  const startEdit = (id: string) => {
+    const item = snapshot.screenings.find((entry) => entry.id === id);
+    if (!item) return;
+    setEditingId(id);
+    setForm({
+      titleId: item.titleId,
+      seasonNumber: item.seasonNumber ? String(item.seasonNumber) : "",
+      episodeStart: item.episodeStart ? String(item.episodeStart) : "1",
+      episodeEnd: item.episodeEnd ? String(item.episodeEnd) : "1",
+      startsAt: toLocalInput(item.startsAt),
+      endsAt: toLocalInput(item.endsAt),
+      location: item.location,
+      capacity: String(item.capacity),
+      price: String(item.priceMinor / 100),
+      salesOpenAt: toLocalInput(item.salesOpenAt),
+      salesCloseAt: toLocalInput(item.salesCloseAt),
+    });
+  };
+
   return (
     <section className="cd-section">
       <div className="cd-section-header">
         <div><p className="cd-eyebrow">PUBLISHED SHOWINGS</p><h1>Screenings</h1><p>Schedule films and series events with capacity, price, and sales windows.</p></div>
-        <PrimaryButton onClick={() => setForm(emptyScreeningForm())}>Schedule screening</PrimaryButton>
+        <PrimaryButton onClick={() => { setEditingId(null); setForm(emptyScreeningForm()); }}>Schedule screening</PrimaryButton>
       </div>
       {notice && <div className="cd-notice" role="status">{notice}</div>}
       {error && <div className="cd-error" role="alert">{error}</div>}
@@ -721,14 +868,18 @@ function ScreeningsTab({ snapshot, orderedCatalog, onCommit, live }: { snapshot:
               <div className="cd-screening-title"><strong>{screening.title}</strong><small>{screening.location}{screening.seasonNumber ? ` · Season ${screening.seasonNumber}, E${screening.episodeStart}–${screening.episodeEnd}` : ""}</small><span className="cd-muted">₹{screening.priceMinor / 100} · {fmtDateTime(screening.startsAt)}</span></div>
               <div className="cd-screening-occupancy"><div className="cd-capacity-bar"><i style={{ width: `${pct}%` }} /></div><small>{screening.soldCount} sold · {remainingCapacity(screening)} remaining</small></div>
               <span className={`cd-chip ${screening.cancelled ? "chip-cancelled" : "chip-active"}`}>{screening.cancelled ? "Cancelled" : status.replace(/-/g, " ")}</span>
-              <div className="cd-actions">{upcoming && <button type="button" className="cd-mini" disabled={saving} onClick={() => setCancelled(screening.id, !screening.cancelled)}>{screening.cancelled ? "Reopen" : "Cancel"}</button>}</div>
+              <div className="cd-actions">
+                <button type="button" className="cd-mini" disabled={saving} onClick={() => startEdit(screening.id)}>Edit</button>
+                {upcoming && <button type="button" className="cd-mini" disabled={saving} onClick={() => setCancelled(screening.id, !screening.cancelled)}>{screening.cancelled ? "Reopen" : "Cancel"}</button>}
+                <button type="button" className="cd-mini danger" disabled={saving} onClick={() => remove(screening.id, screening.title)}>Delete</button>
+              </div>
             </article>
           );
         })}
         {!screeningList(snapshot).length && <div className="cd-empty">No screenings have been scheduled yet.</div>}
       </div>
 
-      {form && (
+      {form && !editingId && (
         <Modal title="Schedule a screening" onClose={() => setForm(null)}>
           <form className="cd-form" onSubmit={schedule}>
             <Field label="Title">
@@ -754,11 +905,316 @@ function ScreeningsTab({ snapshot, orderedCatalog, onCommit, live }: { snapshot:
               <Field label="Capacity"><input type="number" min="1" required value={form.capacity} onChange={(event) => setForm({ ...form, capacity: event.target.value })} /></Field>
               <Field label="Ticket price (₹)"><input type="number" min="0" step="0.01" required value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></Field>
             </div>
-            <p className="cd-note">A screening can be scheduled while its title is Upcoming. Sales open only after activation.</p>
+            <div className="cd-two-col">
+              <Field label="Sales open at (optional)"><input type="datetime-local" value={form.salesOpenAt} onChange={(event) => setForm({ ...form, salesOpenAt: event.target.value })} /></Field>
+              <Field label="Sales close at (optional)"><input type="datetime-local" value={form.salesCloseAt} onChange={(event) => setForm({ ...form, salesCloseAt: event.target.value })} /></Field>
+            </div>
+            <p className="cd-note">A screening can be scheduled while its title is Upcoming. Sales open only after activation. Leave the sales window empty to open on publication and close at showtime.</p>
             <footer className="cd-form-footer"><OutlineButton onClick={() => setForm(null)}>Cancel</OutlineButton><PrimaryButton type="submit">Save screening</PrimaryButton></footer>
           </form>
         </Modal>
       )}
+      {form && editingId && (
+        <Modal title="Edit screening" onClose={() => { setForm(null); setEditingId(null); }}>
+          <form className="cd-form" onSubmit={saveEdit}>
+            <div className="cd-two-col">
+              <Field label="Start date &amp; time"><input required type="datetime-local" value={form.startsAt} onChange={(event) => setForm({ ...form, startsAt: event.target.value })} /></Field>
+              <Field label="End date &amp; time"><input required type="datetime-local" value={form.endsAt} onChange={(event) => setForm({ ...form, endsAt: event.target.value })} /></Field>
+            </div>
+            <Field label="Venue / location"><input required value={form.location} onChange={(event) => setForm({ ...form, location: event.target.value })} /></Field>
+            <div className="cd-two-col">
+              <Field label="Capacity"><input type="number" min="1" required value={form.capacity} onChange={(event) => setForm({ ...form, capacity: event.target.value })} /></Field>
+              <Field label="Ticket price (₹)"><input type="number" min="0" step="0.01" required value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></Field>
+            </div>
+            <div className="cd-two-col">
+              <Field label="Sales open at (optional)"><input type="datetime-local" value={form.salesOpenAt} onChange={(event) => setForm({ ...form, salesOpenAt: event.target.value })} /></Field>
+              <Field label="Sales close at (optional)"><input type="datetime-local" value={form.salesCloseAt} onChange={(event) => setForm({ ...form, salesCloseAt: event.target.value })} /></Field>
+            </div>
+            <footer className="cd-form-footer"><OutlineButton onClick={() => { setForm(null); setEditingId(null); }}>Cancel</OutlineButton><PrimaryButton type="submit" disabled={saving}>Save changes</PrimaryButton></footer>
+          </form>
+        </Modal>
+      )}
+    </section>
+  );
+}
+
+function BookingsTab({ snapshot, live }: { snapshot: AdminSnapshot; live: LiveStore | null }) {
+  const [screeningId, setScreeningId] = useState("");
+  const [bookings, setBookings] = useState<AdminBooking[]>([]);
+  const [holds, setHolds] = useState<BookingHold[]>([]);
+  const [checkins, setCheckins] = useState<CheckinRecord[]>([]);
+  const [doorCounts, setDoorCounts] = useState<{ soldCount: number; checkedInCount: number } | null>(null);
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [ticketInput, setTicketInput] = useState("");
+  const [ticketResult, setTicketResult] = useState("");
+
+  const list = [...snapshot.screenings].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+  const selected = list.find((item) => item.id === screeningId);
+
+  const load = useCallback((id: string, token: string | null) => {
+    if (!id || !token) {
+      setBookings([]);
+      setHolds([]);
+      setCheckins([]);
+      setDoorCounts(null);
+      return;
+    }
+    setBusy(true);
+    setError("");
+    void Promise.all([
+      fetchAdminBookings(token, id).catch(() => [] as AdminBooking[]),
+      fetchAdminHolds(token, id).catch(() => [] as BookingHold[]),
+      fetchCheckins(token, id).catch(() => [] as CheckinRecord[]),
+      fetchStaffScreenings(token).catch(() => []),
+    ])
+      .then(([bookingRows, holdRows, checkinRows, staffRows]) => {
+        setBookings(bookingRows);
+        setHolds(holdRows);
+        setCheckins(checkinRows);
+        const match = (staffRows as { id: string; soldCount: number; checkedInCount: number }[]).find((row) => row.id === id);
+        setDoorCounts(match ? { soldCount: match.soldCount, checkedInCount: match.checkedInCount } : null);
+      })
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Load failed."))
+      .finally(() => setBusy(false));
+  }, []);
+
+  useEffect(() => {
+    if (!list.length && !screeningId) return;
+    const fallback = screeningId || list[0]?.id || "";
+    if (fallback && fallback !== screeningId) setScreeningId(fallback);
+  }, [list, screeningId]);
+
+  useEffect(() => {
+    if (live && screeningId) {
+      load(screeningId, live.token);
+      const timer = window.setInterval(() => load(screeningId, live.token), 20000);
+      return () => window.clearInterval(timer);
+    }
+  }, [live, screeningId, load]);
+
+  const mutateBooking = (bookingId: string, action: "refund" | "cancel") => {
+    if (!live) return;
+    if (!window.confirm(`${action === "refund" ? "Refund" : "Cancel"} this booking? Its ticket becomes invalid immediately.`)) return;
+    setBusy(true);
+    setError("");
+    void (action === "refund" ? refundBookingRemote(live.token, bookingId) : cancelBookingRemote(live.token, bookingId))
+      .then(() => {
+        setNotice(`Booking ${action === "refund" ? "refunded" : "cancelled"}.`);
+        load(screeningId, live.token);
+        void live.refresh();
+      })
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Update failed."))
+      .finally(() => setBusy(false));
+  };
+
+  const dropHold = (holdId: string) => {
+    if (!live) return;
+    setBusy(true);
+    void releaseHoldRemote(live.token, holdId)
+      .then(() => {
+        setNotice("Hold released — inventory is back on sale.");
+        load(screeningId, live.token);
+      })
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Release failed."))
+      .finally(() => setBusy(false));
+  };
+
+  const lookupTicket = (mode: "validate" | "check-in") => {
+    if (!live) return;
+    let code: string;
+    try {
+      code = normalizeTicketCode(ticketInput);
+    } catch {
+      setTicketResult("That code does not look like MSY-XXXX-XXXX.");
+      return;
+    }
+    setBusy(true);
+    setTicketResult("");
+    if (mode === "validate") {
+      void validateStaffTicketRemote(live.token, code)
+        .then((result) => {
+          setTicketResult(`Lookup: ${result.status} — ${result.title ?? code}${result.location ? ` · ${result.location}` : ""}`);
+          if (screeningId) load(screeningId, live.token);
+        })
+        .catch((cause: unknown) => setTicketResult(cause instanceof Error ? cause.message : "Ticket lookup failed."))
+        .finally(() => setBusy(false));
+      return;
+    }
+    void checkInStaffTicketRemote(live.token, code)
+      .then((result) => {
+        setTicketResult(`Check-in: ${result.status} — ${result.code}`);
+        if (screeningId) load(screeningId, live.token);
+      })
+      .catch((cause: unknown) => setTicketResult(cause instanceof Error ? cause.message : "Ticket lookup failed."))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <section className="cd-section">
+      <div className="cd-section-header">
+        <div><p className="cd-eyebrow">TICKETS &amp; DOORS</p><h1>Bookings</h1><p>Every booking, hold, and door scan for one screening — plus the staff validate/check-in tool.</p></div>
+      </div>
+      {!live && <div className="cd-notice" role="status">Sign in as an admin to load live bookings, holds, and door counts. Preview mode shows the schedule only.</div>}
+      {notice && <div className="cd-notice" role="status">{notice}</div>}
+      {error && <div className="cd-error" role="alert">{error}</div>}
+      <div className="cd-toolbar">
+        <label className="cd-search"><span aria-hidden="true">▦</span>
+          <select value={screeningId} onChange={(event) => setScreeningId(event.target.value)} aria-label="Screening">
+            <option value="">Choose a screening</option>
+            {list.map((item) => <option key={item.id} value={item.id}>{item.title} · {dateOnly.format(new Date(item.startsAt))} · {item.location}</option>)}
+          </select>
+        </label>
+        {selected && <span className="cd-count">{selected.soldCount} sold · {remainingCapacity(selected)} remaining · {selected.capacity} capacity</span>}
+        {doorCounts && <span className="cd-count">Doors: {doorCounts.checkedInCount} checked in / {doorCounts.soldCount} sold</span>}
+      </div>
+
+      <div className="cd-detail-grid">
+        <section>
+          <h4 className="cd-h4">Confirmed bookings ({bookings.length})</h4>
+          {bookings.length ? (
+            <table className="cd-mini-table">
+              <thead><tr><th>Order</th><th>Qty</th><th>Status</th><th>Ticket</th><th /></tr></thead>
+              <tbody>{bookings.map((booking) => (
+                <tr key={booking.id}>
+                  <td><code>{booking.orderCode}</code><small>{booking.amountMinor != null ? money(booking.amountMinor) : ""} · {booking.userId.slice(0, 12)}…</small></td>
+                  <td>{booking.quantity}</td>
+                  <td><span className={`cd-chip ${booking.status === "confirmed" ? "chip-active" : "chip-cancelled"}`}>{booking.status}</span></td>
+                  <td><span className={`cd-chip ${booking.ticketStatus === "valid" ? "chip-active" : booking.ticketStatus === "used" ? "chip-upcoming" : "chip-cancelled"}`}>{booking.ticketStatus}</span></td>
+                  <td>{booking.status === "confirmed" && <span className="cd-actions">
+                    <button type="button" className="cd-mini" disabled={busy} onClick={() => mutateBooking(booking.id, "refund")}>Refund</button>
+                    <button type="button" className="cd-mini danger" disabled={busy} onClick={() => mutateBooking(booking.id, "cancel")}>Cancel</button>
+                  </span>}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          ) : <p className="cd-muted">{live && screeningId ? (busy ? "Loading…" : "No bookings for this screening yet.") : "Pick a screening to inspect its bookings."}</p>}
+        </section>
+        <section>
+          <h4 className="cd-h4">Live holds ({holds.length})</h4>
+          {holds.length ? (
+            <table className="cd-mini-table">
+              <thead><tr><th>Holder</th><th>Qty</th><th>Expires</th><th /></tr></thead>
+              <tbody>{holds.map((hold) => (
+                <tr key={hold.id}><td><code>{hold.userId.slice(0, 16)}…</code></td><td>{hold.quantity}</td><td>{fmtDateTime(hold.expiresAt)}</td>
+                  <td><button type="button" className="cd-mini" disabled={busy} onClick={() => dropHold(hold.id)}>Release</button></td></tr>
+              ))}</tbody>
+            </table>
+          ) : <p className="cd-muted">No live holds.</p>}
+          <h4 className="cd-h4" style={{ marginTop: 18 }}>Door scans ({checkins.length})</h4>
+          {checkins.length ? (
+            <table className="cd-mini-table">
+              <thead><tr><th>Order</th><th>Result</th><th>Staff</th><th>At</th></tr></thead>
+              <tbody>{checkins.slice(0, 20).map((scan) => (
+                <tr key={scan.id}><td><code>{scan.orderCode}</code></td><td>{scan.result}</td><td>{scan.staffSub.slice(0, 12)}…</td><td>{fmtDateTime(scan.createdAt)}</td></tr>
+              ))}</tbody>
+            </table>
+          ) : <p className="cd-muted">No scans recorded for this screening yet.</p>}
+        </section>
+      </div>
+
+      <section className="cd-settings-form" style={{ marginTop: 22 }}>
+        <h4 className="cd-h4">Staff validate / check-in</h4>
+        <p className="cd-note">Same ticket contract as the door app: <code>MSY-XXXX-XXXX</code> or <code>marvelsyllabus://ticket/MSY-XXXX-XXXX</code>. Validate looks up without changing state; check-in admits exactly once.</p>
+        <div className="cd-toolbar">
+          <label className="cd-search"><span aria-hidden="true">⌕</span><input value={ticketInput} onChange={(event) => setTicketInput(event.target.value)} placeholder="MSY-XXXX-XXXX" disabled={!live} /></label>
+          <OutlineButton onClick={() => lookupTicket("validate")}>Validate</OutlineButton>
+          <PrimaryButton onClick={() => lookupTicket("check-in")}>Check in</PrimaryButton>
+        </div>
+        {ticketResult && <div className="cd-notice" role="status">{ticketResult}</div>}
+      </section>
+    </section>
+  );
+}
+
+function SystemTab({ snapshot, onCommit, live }: { snapshot: AdminSnapshot; onCommit: (next: AdminSnapshot) => void; live: LiveStore | null }) {
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [importText, setImportText] = useState("");
+
+  const runImport = () => {
+    if (!live) {
+      setError("Catalog import writes to the shared database — sign in as an admin first.");
+      return;
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(importText);
+    } catch {
+      setError("That is not valid JSON. Paste an array of catalog entries.");
+      return;
+    }
+    const entries = Array.isArray(parsed) ? parsed : (parsed as { entries?: unknown }).entries;
+    if (!Array.isArray(entries) || !entries.length) {
+      setError("Expected a JSON array of entries with id, title, titleType, and watchOrder.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    void importCatalogRemote(live.token, entries as { id: string; title: string; titleType: string; watchOrder: number }[])
+      .then((result) => live.refresh().then(() => {
+        setNotice(`Imported ${result.imported} titles. Repeat imports never overwrite existing rows.`);
+        setImportText("");
+      }))
+      .catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Import failed."))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <section className="cd-section">
+      <div className="cd-section-header">
+        <div><p className="cd-eyebrow">DATA &amp; LAUNCH</p><h1>System</h1><p>Imports, demo controls, backend status, and the public-launch checklist.</p></div>
+      </div>
+      {notice && <div className="cd-notice" role="status">{notice}</div>}
+      {error && <div className="cd-error" role="alert">{error}</div>}
+
+      <div className="cd-detail-grid">
+        <section>
+          <h4 className="cd-h4">Backend status</h4>
+          <table className="cd-mini-table">
+            <tbody>
+              <tr><td>Mode</td><td>{live ? "Live · shared Postgres backend" : "Preview · browser-local demo store"}</td></tr>
+              <tr><td>Catalog rows</td><td>{snapshot.catalog.length}</td></tr>
+              <tr><td>Screenings</td><td>{snapshot.screenings.length}</td></tr>
+              <tr><td>Banners</td><td>{snapshot.banners.length}</td></tr>
+              <tr><td>Campaigns</td><td>{snapshot.campaigns.length}</td></tr>
+              <tr><td>Activity entries</td><td>{snapshot.activity.length}</td></tr>
+            </tbody>
+          </table>
+          {snapshot.source === "demo" && (
+            <div className="cd-code-add">
+              <p className="cd-note">Preview data lives only in this browser. Resetting restores the original 8-title seed.</p>
+              <OutlineButton onClick={() => { if (window.confirm("Reset all demo data to the original seed?")) { onCommit(resetAdminData()); setNotice("Demo data reset."); } }}>Reset demo data</OutlineButton>
+            </div>
+          )}
+        </section>
+        <section>
+          <h4 className="cd-h4">One-time catalog import</h4>
+          <p className="cd-note">Paste the watchlist JSON array (or <code>{"{"}"entries": […]{"}"}</code>). IDs, titles, types, descriptions, release years, and <code>suggested_watch_order</code> are copied; artwork is never imported and every title starts Upcoming. Conflicts are left untouched.</p>
+          <div className="cd-code-add">
+            <textarea rows={6} value={importText} onChange={(event) => setImportText(event.target.value)} placeholder='[{ "id": "iron-man", "title": "Iron Man", "titleType": "film", "watchOrder": 2 }]' aria-label="Catalog import JSON" />
+            <PrimaryButton onClick={runImport}>Import to shared catalog</PrimaryButton>
+          </div>
+        </section>
+      </div>
+
+      <section style={{ marginTop: 22 }}>
+        <h4 className="cd-h4">Public-launch checklist</h4>
+        <table className="cd-mini-table">
+          <thead><tr><th>Step</th><th>Where</th><th>Done when</th></tr></thead>
+          <tbody>
+            <tr><td>Migrate Neon (001 → 004, in order)</td><td><code>prototype/db/</code></td><td>All four files applied to the Singapore project</td></tr>
+            <tr><td>Set Pages secrets (no VITE_ prefix)</td><td>Cloudflare → both Pages projects</td><td><code>DATABASE_URL</code>, <code>OBJECT_STORAGE_*</code>, <code>CLERK_*</code>, <code>RAZORPAY_*</code> present</td></tr>
+            <tr><td>Clerk JWT template <code>platform-api</code></td><td>Clerk dashboard</td><td><code>role</code> claim flows from public metadata; owner has <code>admin</code></td></tr>
+            <tr><td>Deploy both web apps</td><td><code>frame-catalog</code> + <code>marvelsyllabus-command-deck</code></td><td><code>npm run build</code> green; game chunk lazy-loaded</td></tr>
+            <tr><td>Import catalog once</td><td>This tab ↑</td><td>Titles visible as Upcoming; preview ribbon gone on customer app</td></tr>
+            <tr><td>Activate + schedule + reconcile</td><td>Catalog → Screenings → Bookings</td><td>Hold → booking → QR → door scan → re-scan shows <code>already_used</code></td></tr>
+            <tr><td>Restore one encrypted backup</td><td>Disposable Neon project</td><td>Restore succeeds before the first public booking</td></tr>
+          </tbody>
+        </table>
+      </section>
     </section>
   );
 }

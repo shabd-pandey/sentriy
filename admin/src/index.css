@@ -98,6 +98,8 @@ code { font-family: "Space Mono", monospace; font-size: 12px; }
 .cd-search { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--ink-soft); min-width: 260px; flex: 1; max-width: 460px; }
 .cd-search span { color: var(--dim); font-size: 16px; }
 .cd-search input { width: 100%; border: none; background: transparent; outline: none; color: var(--white); font-size: 13px; }
+.cd-search select { width: 100%; border: none; background: transparent; outline: none; color: var(--white); font-size: 13px; }
+.cd-search select option { background: var(--ink-soft); color: var(--white); }
 .cd-filter { display: flex; gap: 4px; flex-wrap: wrap; }
 .cd-filter button { padding: 7px 13px; border: 1px solid transparent; border-radius: 999px; background: transparent; color: var(--muted); font-size: 12px; }
 .cd-filter button:hover { color: var(--white); }
@@ -116,6 +118,10 @@ code { font-family: "Space Mono", monospace; font-size: 12px; }
 .cat-settings { background: rgba(224, 99, 75, 0.16); color: #eea08c; }
 .cat-banner { background: rgba(47, 179, 166, 0.16); color: #7fd8ce; }
 .cat-reward { background: rgba(151, 113, 216, 0.16); color: #c3a6ef; }
+.cat-booking { background: rgba(47, 179, 166, 0.16); color: #7fd8ce; }
+.cat-ticket { background: rgba(245, 196, 81, 0.16); color: var(--amber-light); }
+.cat-system { background: rgba(224, 99, 75, 0.16); color: #eea08c; }
+.cd-h4 { margin: 0 0 10px; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--amber); }
 .cd-actor { color: var(--dim); font-family: "Space Mono", monospace; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cd-activity-row time { color: var(--muted); font-family: "Space Mono", monospace; font-size: 12px; text-align: right; }
 
@@ -146,7 +152,10 @@ code { font-family: "Space Mono", monospace; font-size: 12px; }
 .cd-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .cd-mini { padding: 5px 11px; border: 1px solid var(--line-strong); border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; }
 .cd-mini:hover { color: var(--white); border-color: var(--amber); }
+.cd-mini.danger { border-color: rgba(226, 99, 75, 0.5); color: var(--danger); }
 .cd-mini.danger:hover { color: var(--danger); border-color: var(--danger); }
+.cd-skip { position: absolute; left: -999px; top: 0; padding: 10px 16px; background: var(--amber); color: var(--ink); font-weight: 700; z-index: 100; }
+.cd-skip:focus { left: 8px; top: 8px; }
 
 .cd-banner-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
 .cd-banner { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--ink-panel); }

@@ -558,6 +558,59 @@ export function toggleScreeningCancelled(snapshot: AdminSnapshot, id: string, ca
   }, { screenings });
 }
 
+export function deleteTitle(snapshot: AdminSnapshot, id: string): AdminSnapshot {
+  const title = snapshot.catalog.find((item) => item.id === id);
+  if (snapshot.screenings.some((item) => item.titleId === id)) {
+    return snapshot;
+  }
+  return withActivity(snapshot, {
+    category: "catalog",
+    summary: `Deleted catalog title "${title?.title ?? id}"`,
+    refLabel: title?.title,
+  }, {
+    catalog: snapshot.catalog.filter((item) => item.id !== id),
+    banners: snapshot.banners.map((banner) =>
+      banner.destinationTitleId === id ? { ...banner, destinationTitleId: null } : banner),
+  });
+}
+
+export interface ScreeningPatchDraft {
+  location?: string;
+  startsAt?: string;
+  endsAt?: string;
+  capacity?: number;
+  priceMinor?: number;
+  salesOpenAt?: string | null;
+  salesCloseAt?: string | null;
+  cancelled?: boolean;
+}
+
+export function updateScreening(snapshot: AdminSnapshot, id: string, patch: ScreeningPatchDraft): AdminSnapshot {
+  const screenings = snapshot.screenings.map((item) =>
+    item.id === id ? { ...item, ...patch } : item);
+  const screening = snapshot.screenings.find((item) => item.id === id);
+  return withActivity(snapshot, {
+    category: "screening",
+    summary: `Updated screening ${id}`,
+    screeningId: id,
+    refLabel: screening?.title,
+  }, { screenings });
+}
+
+export function deleteScreening(snapshot: AdminSnapshot, id: string): AdminSnapshot {
+  const screening = snapshot.screenings.find((item) => item.id === id);
+  return withActivity(snapshot, {
+    category: "screening",
+    summary: `Deleted screening ${id}`,
+    screeningId: null,
+    refLabel: screening?.title,
+  }, {
+    screenings: snapshot.screenings.filter((item) => item.id !== id),
+    banners: snapshot.banners.map((banner) =>
+      banner.destinationScreeningId === id ? { ...banner, destinationScreeningId: null } : banner),
+  });
+}
+
 export function upsertBanner(snapshot: AdminSnapshot, id: string | null, draft: BannerDraft): AdminSnapshot {
   const existing = id ? snapshot.banners.find((item) => item.id === id) : undefined;
   const banner: Banner = {
