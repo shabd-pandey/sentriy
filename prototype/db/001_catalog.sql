@@ -99,7 +99,9 @@ CREATE TABLE IF NOT EXISTS bookings (
 
 CREATE OR REPLACE VIEW customer_screenings AS
 SELECT
-  s.*,
+  s.id, s.title_id, s.starts_at, s.ends_at, s.location, s.capacity, s.price_minor,
+  s.sales_open_at, s.sales_close_at, s.cancelled, s.season_number,
+  s.episode_start, s.episode_end, s.created_at,
   t.title,
   t.title_type,
   t.active AS title_active,

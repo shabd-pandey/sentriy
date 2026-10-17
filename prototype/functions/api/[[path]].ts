@@ -12,6 +12,13 @@ interface Env {
   CLERK_ISSUER: string;
   CLERK_JWKS_URL: string;
   CLERK_AUDIENCE?: string;
+  /**
+   * Comma-separated, case-insensitive Google-email allowlist. An allowlisted
+   * verified email is granted the `admin` role, bootstrapping the owner without
+   * manual Clerk metadata. Additive with the Clerk `role` claim: metadata roles
+   * keep working, including when this is unset.
+   */
+  OWNER_EMAILS?: string;
 }
 
 interface Claims {
@@ -21,6 +28,7 @@ interface Claims {
   nbf?: number;
   aud?: string | string[];
   role?: string;
+  email?: string;
 }
 
 type ClerkJwk = JsonWebKey & { kid?: string; kty?: string };
@@ -41,6 +49,23 @@ const decodeBase64Url = (value: string) => {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   return Uint8Array.from(atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=")), (c) => c.charCodeAt(0));
 };
+
+type Role = "admin" | "staff" | "customer";
+
+// Roles are resolved from server-side facts only: the allowlist configured on
+// the deployment and the role claim of a signature-verified JWT. Nothing a
+// client sends (body, headers, metadata) can grant admin or staff. An
+// allowlisted verified email is additive with, and takes precedence over, the
+// Clerk metadata role, so public sign-up stays customer-only.
+function resolveRole(claims: Claims, env: Env): Role {
+  const email = typeof claims.email === "string" ? claims.email.trim().toLowerCase() : "";
+  const allowlisted = (env.OWNER_EMAILS ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
+  if (email && allowlisted.includes(email)) return "admin";
+  return claims.role === "admin" || claims.role === "staff" ? claims.role : "customer";
+}
 
 async function authenticatedUser(request: Request, env: Env, admin = false): Promise<Claims> {
   const token = request.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1];
@@ -80,8 +105,9 @@ async function authenticatedUser(request: Request, env: Env, admin = false): Pro
     typeof claims.exp !== "number" || claims.exp <= now ||
     (claims.nbf !== undefined && claims.nbf > now) || !audienceValid
   ) throw new Error("unauthorized");
-  if (admin && claims.role !== "admin") throw new Error("forbidden");
-  return claims;
+  const role = resolveRole(claims, env);
+  if (admin && role !== "admin") throw new Error("forbidden");
+  return { ...claims, role };
 }
 
 async function requireStaff(request: Request, env: Env): Promise<Claims> {
@@ -141,7 +167,7 @@ const artworkKey = (value: unknown) => {
   if (typeof value !== "string" || !/^artwork\/[a-zA-Z0-9-]+\.(jpg|png|webp)$/.test(value)) throw new Error("invalid_image_key");
   return value;
 };
-type Db = ReturnType<typeof neon>;
+type Db = ReturnType<typeof neon<false, false>>;
 const recordActivity = async (db: Db, meta: {
   actor: string;
   category: "catalog" | "screening" | "artwork" | "settings" | "banner" | "reward" | "booking" | "ticket" | "system";

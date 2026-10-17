@@ -55,4 +55,5 @@ SELECT
   COALESCE((
     SELECT count(*)::integer FROM bookings b
     WHERE b.screening_id = s.id AND b.status = 'confirmed' AND b.ticket_status = 'used'
-  ), 0) AS checked_in_bookings;
+  ), 0) AS checked_in_bookings
+FROM screenings s;
