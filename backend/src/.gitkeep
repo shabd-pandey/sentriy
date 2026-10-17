@@ -1,0 +1,10 @@
+# @sentriy/backend
+
+Single shared Postgres-backed API for the MarvelSyllabus movie-ticketing platform.
+
+This file is intentionally empty — `src/worker.ts` will be created by moving the canonical worker
+out of `prototype/functions/api/[[path]].ts` once ticket 01 (runnable platform foundation) lands on
+`integration/movie-ticketing-platform`.
+
+Do not edit `prototype/functions/api/[[path]].ts` directly after this point; all API changes go
+through `backend/src/worker.ts`, and both Pages projects re-export it.
