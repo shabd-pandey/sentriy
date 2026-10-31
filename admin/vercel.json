@@ -4,8 +4,11 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "regions": ["sin1"],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/[...path]?__path=$1" }
+  ],
   "functions": {
-    "api/**/*.js": {
+    "api/*.js": {
       "maxDuration": 30
     }
   }
