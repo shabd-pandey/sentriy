@@ -419,37 +419,38 @@ export async function loadCustomerSnapshot(getToken?: () => Promise<string | nul
   let rewards: RewardGrant[] = [];
   let campaign = emptyCampaign();
 
-  if (token) {
-    const [accountResult, progressResult, walletResult, rewardsResult] = await Promise.allSettled([
-      loadAccount(token),
-      loadProgress(token),
-      loadWallet(token),
-      loadRewards(token),
-    ]);
+  // Sign-in is optional. Without a Clerk token the worker identifies this
+  // browser by the guest id sent with every request, so the account, wallet and
+  // rewards all still resolve.
+  const [accountResult, progressResult, walletResult, rewardsResult] = await Promise.allSettled([
+    loadAccount(token),
+    loadProgress(token),
+    loadWallet(token),
+    loadRewards(token),
+  ]);
 
-    if (accountResult.status === "fulfilled") {
-      settings = accountResult.value;
-    } else {
-      issues.push("account_unavailable");
-    }
-    if (progressResult.status === "fulfilled") {
-      progress = progressResult.value;
-    } else {
-      issues.push("progress_unavailable");
-    }
-    // A paid ticket only exists on the server. Never let local rows stand in
-    // for the wallet; an empty wallet is the truthful answer.
-    if (walletResult.status === "fulfilled") {
-      bookings = walletResult.value.map(toTicketBooking);
-    } else {
-      issues.push("wallet_unavailable");
-    }
-    if (rewardsResult.status === "fulfilled") {
-      campaign = rewardsResult.value.campaign;
-      rewards = rewardsResult.value.grants;
-    } else {
-      issues.push("rewards_unavailable");
-    }
+  if (accountResult.status === "fulfilled") {
+    settings = accountResult.value;
+  } else {
+    issues.push("account_unavailable");
+  }
+  if (progressResult.status === "fulfilled") {
+    progress = progressResult.value;
+  } else {
+    issues.push("progress_unavailable");
+  }
+  // A ticket only exists on the server. Never let local rows stand in for the
+  // wallet; an empty wallet is the truthful answer.
+  if (walletResult.status === "fulfilled") {
+    bookings = walletResult.value.map(toTicketBooking);
+  } else {
+    issues.push("wallet_unavailable");
+  }
+  if (rewardsResult.status === "fulfilled") {
+    campaign = rewardsResult.value.campaign;
+    rewards = rewardsResult.value.grants;
+  } else {
+    issues.push("rewards_unavailable");
   }
 
   return {
@@ -473,12 +474,10 @@ export async function saveWatchedProgress(
   getToken?: () => Promise<string | null>,
 ) {
   const token = await getToken?.();
-  if (token) {
-    await apiRequest("/api/progress", token, {
-      method: "PUT",
-      body: JSON.stringify({ ...item, watched }),
-    });
-  }
+  await apiRequest("/api/progress", token, {
+    method: "PUT",
+    body: JSON.stringify({ ...item, watched }),
+  });
 }
 
 export async function saveCustomerSettings(
@@ -486,9 +485,8 @@ export async function saveCustomerSettings(
   getToken?: () => Promise<string | null>,
 ) {
   const token = await getToken?.();
-  if (!token) return null;
   const { displayName, shareWatched, shareStreak, productUpdates, reminderNotifications } = settings;
-  return saveAccount(token, {
+  return saveAccount(token ?? null, {
     ...(displayName === undefined ? {} : { displayName }),
     ...(shareWatched === undefined ? {} : { shareWatched }),
     ...(shareStreak === undefined ? {} : { shareStreak }),

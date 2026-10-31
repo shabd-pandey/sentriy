@@ -61,6 +61,8 @@ export interface WatchedItem {
 // the shared worker are deployed on different hosts.
 export const API_BASE = ((import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "").replace(/\/+$/, "");
 
+import { guestId } from "./guest";
+
 export async function apiRequest<T>(
   path: string,
   token?: string | null,
@@ -68,6 +70,7 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const headers = new Headers(init.headers);
   if (token) headers.set("authorization", `Bearer ${token}`);
+  headers.set("x-customer-id", guestId());
   if (init.body && !(init.body instanceof FormData)) headers.set("content-type", "application/json");
   const response = await fetch(`${API_BASE}${path}`, { ...init, headers });
   if (!response.ok) {
@@ -80,6 +83,8 @@ export async function apiRequest<T>(
 export interface PublicConfig {
   razorpayKeyId: string | null;
   authConfigured: boolean;
+  authMode?: "demo" | "clerk";
+  paymentsMode?: "manual" | "razorpay";
 }
 
 export const loadPublicConfig = () => apiRequest<PublicConfig>("/api/config");
@@ -100,9 +105,9 @@ export const loadHealth = () => apiRequest<HealthReport>("/api/health");
 
 export const loadCatalog = () => apiRequest<CatalogTitle[]>("/api/catalog");
 export const loadScreenings = () => apiRequest<Screening[]>("/api/screenings");
-export const loadSeasons = (id: string, token: string) =>
+export const loadSeasons = (id: string, token?: string | null) =>
   apiRequest<Season[]>(`/api/admin/series/${encodeURIComponent(id)}/seasons`, token);
-export const loadProgress = (token: string) => apiRequest<WatchedItem[]>("/api/progress", token);
+export const loadProgress = (token?: string | null) => apiRequest<WatchedItem[]>("/api/progress", token);
 export const loadProfileQr = () => apiRequest<{ qrDestination: string | null }>("/api/profile-qr");
 
 export interface PublicBanner {
@@ -126,10 +131,10 @@ export interface AccountSettings {
   qrDestination: string | null;
 }
 
-export const loadAccount = (token: string) => apiRequest<AccountSettings>("/api/account", token);
+export const loadAccount = (token?: string | null) => apiRequest<AccountSettings>("/api/account", token);
 
 export const saveAccount = (
-  token: string,
+  token: string | null,
   settings: Partial<Pick<AccountSettings, "displayName" | "shareWatched" | "shareStreak" | "productUpdates" | "reminderNotifications">>,
 ) => apiRequest<AccountSettings>("/api/account", token, {
   method: "PUT",
@@ -170,15 +175,15 @@ export interface RewardsState {
   grants: RewardGrant[];
 }
 
-export const loadRewards = (token: string) => apiRequest<RewardsState>("/api/rewards", token);
+export const loadRewards = (token?: string | null) => apiRequest<RewardsState>("/api/rewards", token);
 
-export const startRewardRound = (token: string) =>
+export const startRewardRound = (token?: string | null) =>
   apiRequest<{ startedAt: string; expiresAt: string }>("/api/rewards/rounds/start", token, { method: "POST" });
 
-export const completeRewardRound = (token: string) =>
+export const completeRewardRound = (token?: string | null) =>
   apiRequest<RewardsState>("/api/rewards/rounds/complete", token, { method: "POST" });
 
-export const claimReward = (token: string) =>
+export const claimReward = (token?: string | null) =>
   apiRequest<RewardsState>("/api/rewards/claim", token, { method: "POST" });
 
 export function sortCatalog(titles: CatalogTitle[]): CatalogTitle[] {
@@ -228,34 +233,28 @@ export function normalizeTicketCode(raw: string) {
   return match[0];
 }
 
-export const loadWallet = (token: string) =>
+export const loadWallet = (token?: string | null) =>
   apiRequest<WalletBooking[]>("/api/bookings", token);
 
-export const createBookingHold = (token: string, screeningId: string, quantity = 1, rewardId?: string) =>
+export const createBookingHold = (token: string | null, screeningId: string, quantity = 1, rewardId?: string) =>
   apiRequest<{ holdId: string; expiresAt: string }>("/api/booking-holds", token, {
     method: "POST",
     body: JSON.stringify({ screeningId, quantity, ...(rewardId ? { rewardId } : {}) }),
   });
 
-export interface RazorpayOrder {
-  order_id?: string;
-  amount: number;
-  currency: string;
+export interface Reservation {
+  /** Manual mode: a pending booking the Command Deck confirms. */
+  manual?: boolean;
   /** A fully discounted reward is confirmed without a payment provider. */
   free?: boolean;
+  bookingId?: string;
   orderCode?: string;
+  amount: number;
+  currency: string;
 }
 
-export const createRazorpayOrder = (token: string, holdId: string) =>
-  apiRequest<RazorpayOrder>("/api/create-order", token, {
+export const reserveSeats = (token: string | null, holdId: string) =>
+  apiRequest<Reservation>("/api/create-order", token, {
     method: "POST",
     body: JSON.stringify({ holdId }),
   });
-
-export const verifyRazorpayPayment = (
-  token: string,
-  payment: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string },
-) => apiRequest<{ success: true; orderCode: string }>("/api/verify-payment", token, {
-  method: "POST",
-  body: JSON.stringify(payment),
-});

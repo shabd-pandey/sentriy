@@ -15,13 +15,13 @@ import {
   claimReward as claimRewardOnServer,
   completeRewardRound,
   createBookingHold,
-  createRazorpayOrder,
   loadPublicConfig,
+  reserveSeats,
   screeningIsBookable,
   sortCatalog,
   startRewardRound,
-  verifyRazorpayPayment,
   type CatalogTitle,
+  type PublicConfig,
   type Screening,
   type TitleType,
   type WatchedItem,
@@ -29,59 +29,9 @@ import {
 
 const TemporalLoom = lazy(() => import("./TemporalLoom"));
 
-type AppProps = {
-  authConfigured?: boolean;
-  getToken?: () => Promise<string | null>;
-  signedIn?: boolean;
-  authControls?: ReactNode;
-};
-
 type Nav = "Discover" | "Streak" | "Ticket" | "Profile";
 type ProfileTab = "profile" | "timeline" | "share" | "settings";
 type ToastTone = "default" | "success" | "danger";
-
-type RazorpayPaymentResponse = {
-  razorpay_payment_id: string;
-  razorpay_order_id: string;
-  razorpay_signature: string;
-};
-
-type RazorpayCheckout = {
-  open: () => void;
-  on: (event: "payment.failed", handler: () => void) => void;
-};
-
-type RazorpayConstructor = new (options: {
-  key: string;
-  amount: number;
-  currency: string;
-  name: string;
-  description: string;
-  order_id: string;
-  handler: (response: RazorpayPaymentResponse) => void;
-  modal: { ondismiss: () => void };
-}) => RazorpayCheckout;
-
-declare global {
-  interface Window {
-    Razorpay?: RazorpayConstructor;
-  }
-}
-
-let razorpayScript: Promise<RazorpayConstructor> | undefined;
-
-function loadRazorpayCheckout() {
-  if (window.Razorpay) return Promise.resolve(window.Razorpay);
-  razorpayScript ??= new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    script.async = true;
-    script.onload = () => window.Razorpay ? resolve(window.Razorpay) : reject(new Error("razorpay_checkout_unavailable"));
-    script.onerror = () => reject(new Error("razorpay_checkout_unavailable"));
-    document.head.append(script);
-  });
-  return razorpayScript;
-}
 
 type IconName = "home" | "ticket" | "streak" | "profile" | "star" | "arrow" | "chevronUp" | "location" | "clock" | "share" | "check" | "lock" | "food" | "heart" | "close" | "bell" | "settings" | "camera" | "image";
 
@@ -296,10 +246,10 @@ function TicketSection({ snapshot, catalog, onPlay, onOpenBooking, onOpenTitle }
   const time = booking.startsAt;
   const hasReward = snapshot.campaign.eligible;
   const ticketLabel = booking.status === "confirmed" ? "Confirmed"
-    : booking.status === "payment_pending" ? "Payment pending"
+    : booking.status === "payment_pending" ? "Awaiting confirmation"
     : booking.status === "refunded" ? "Refunded"
     : "Cancelled";
-  return <main className="ticket-page"><div className="section-topline"><div><p className="cinema-eyebrow">Ready to scan</p><h1>Live ticket</h1></div><span className="ticket-wallet-status"><Icon name="lock" size={13} /> Account wallet</span></div><article className="ticket-card"><div className="ticket-hero">{title?.posterUrl ? <img src={title.posterUrl} alt="" /> : <div className="ticket-hero-placeholder">{title?.title.slice(0, 1) ?? "M"}</div>}<div className="ticket-hero-shade" /><span className="live-chip"><i /> {ticketLabel}</span><div><p>{formatDate(time, { weekday: "long", day: "numeric", month: "short" })}</p><h2>{title?.title ?? "Your next screening"}</h2></div></div><div className="ticket-facts"><div><span>Time</span><strong>{formatDate(time, { hour: "numeric", minute: "2-digit" })}</strong></div><div><span>Hall</span><strong>{locationParts.at(-1) ?? "04"}</strong></div><div><span>Group</span><strong>{booking?.quantity ?? 1} {booking?.quantity === 1 ? "ticket" : "tickets"}</strong></div></div><div className="ticket-stub"><div className="ticket-qr-wrap"><TicketQr value={ticketValue} /></div><div><span>Venue</span><strong>{locationParts[0] ?? "Arc Cinema"}</strong><small>{locationParts.slice(1).join(" · ") || "Show this code at the entrance."}</small><code>{booking?.orderCode ?? "MSY-PREVIEW"}</code></div>{booking && <button className="ticket-open" type="button" onClick={() => onOpenBooking(booking)} aria-label="Open ticket details"><Icon name="arrow" size={16} /></button>}</div></article><div className="ticket-actions"><button className="reward-entry" type="button" onClick={onPlay}><span><span className="reward-icon"><Icon name="food" size={20} /></span><span><strong>Play &amp; Earn Rewards</strong><small>{hasReward ? `${snapshot.campaign.completedPlays} of ${snapshot.campaign.requiredPlays} rounds complete` : "Confirm a paid ticket to unlock"}</small></span></span><b>{hasReward ? "Play" : "Locked"}</b></button><button className="ticket-secondary" type="button" onClick={() => title && onOpenTitle(title)}><Icon name="clock" size={15} /> View screening details</button></div><div className="ticket-list">{snapshot.bookings.slice(1).map((entry) => <button type="button" key={entry.id} onClick={() => onOpenBooking(entry)}><span>{formatDate(entry.startsAt, { day: "numeric", month: "short" })}</span><strong>{entry.title}</strong><small>{entry.orderCode}</small><Icon name="arrow" size={15} /></button>)}</div></main>;
+  return <main className="ticket-page"><div className="section-topline"><div><p className="cinema-eyebrow">Ready to scan</p><h1>Live ticket</h1></div><span className="ticket-wallet-status"><Icon name="lock" size={13} /> Account wallet</span></div><article className="ticket-card"><div className="ticket-hero">{title?.posterUrl ? <img src={title.posterUrl} alt="" /> : <div className="ticket-hero-placeholder">{title?.title.slice(0, 1) ?? "M"}</div>}<div className="ticket-hero-shade" /><span className="live-chip"><i /> {ticketLabel}</span><div><p>{formatDate(time, { weekday: "long", day: "numeric", month: "short" })}</p><h2>{title?.title ?? "Your next screening"}</h2></div></div><div className="ticket-facts"><div><span>Time</span><strong>{formatDate(time, { hour: "numeric", minute: "2-digit" })}</strong></div><div><span>Hall</span><strong>{locationParts.at(-1) ?? "04"}</strong></div><div><span>Group</span><strong>{booking?.quantity ?? 1} {booking?.quantity === 1 ? "ticket" : "tickets"}</strong></div></div><div className="ticket-stub"><div className="ticket-qr-wrap">{booking.status === "confirmed" ? <TicketQr value={ticketValue} /> : <div className="ticket-pending"><Icon name={booking.status === "payment_pending" ? "clock" : "close"} size={26} /><span>{booking.status === "payment_pending" ? "Awaiting confirmation" : "Not scannable"}</span></div>}</div><div><span>Venue</span><strong>{locationParts[0] ?? "Arc Cinema"}</strong><small>{booking.status === "payment_pending" ? "The Command Deck confirms this booking before the door can scan it." : locationParts.slice(1).join(" · ") || "Show this code at the entrance."}</small><code>{booking?.orderCode ?? "MSY-PREVIEW"}</code></div>{booking && <button className="ticket-open" type="button" onClick={() => onOpenBooking(booking)} aria-label="Open ticket details"><Icon name="arrow" size={16} /></button>}</div></article><div className="ticket-actions"><button className="reward-entry" type="button" onClick={onPlay}><span><span className="reward-icon"><Icon name="food" size={20} /></span><span><strong>Play &amp; Earn Rewards</strong><small>{hasReward ? `${snapshot.campaign.completedPlays} of ${snapshot.campaign.requiredPlays} rounds complete` : "Confirm a ticket to unlock"}</small></span></span><b>{hasReward ? "Play" : "Locked"}</b></button><button className="ticket-secondary" type="button" onClick={() => title && onOpenTitle(title)}><Icon name="clock" size={15} /> View screening details</button></div><div className="ticket-list">{snapshot.bookings.slice(1).map((entry) => <button type="button" key={entry.id} onClick={() => onOpenBooking(entry)}><span>{formatDate(entry.startsAt, { day: "numeric", month: "short" })}</span><strong>{entry.title}</strong><small>{entry.orderCode}</small><Icon name="arrow" size={15} /></button>)}</div></main>;
 }
 
 function displayUserId(name: string) {
@@ -358,11 +308,11 @@ function TimelineTree() {
   return <div className="tree-art"><svg viewBox="0 0 360 440" role="img" aria-label="A branching timeline tree"><g className="tree-lines"><path d="M180 410V289c0-23-16-31-16-52V113M180 326c0-29 29-34 29-61V92M165 267c-9-31-42-31-42-65V79M209 247c18-27 52-25 52-62V73M123 187c-13-22-45-19-45-56V55M123 159c17-23 32-29 32-59V38M209 183c-1-32 23-41 23-70V42M260 172c13-21 37-29 37-61V67M180 346c-28 13-56 18-79 40M180 365c27 8 52 21 74 42M180 390c-10 16-15 27-16 40M181 390c14 12 22 23 25 40M78 110 47 89V62m31 67-42 9-18-17m137-59-24-23-2-35m103 57 24-24 1-44m40 82 29-22V49m-65 87 51 8 24-18" /></g><g className="tree-nodes">{[[47,62],[18,121],[78,55],[129,24],[155,38],[232,42],[257,27],[297,67],[336,126],[123,79],[209,92],[164,113]].map(([x,y]) => <circle key={`${x}-${y}`} cx={x} cy={y} r="5" />)}</g></svg><span className="branch-word word-hope">Hope</span><span className="branch-word word-love">Unsaid love</span><span className="branch-word word-grief">Grief</span><span className="branch-word word-happy">Happiness</span><span className="branch-word word-expect">Expectation</span><span className="branch-word word-memory">Memory</span><span className="branch-word word-wonder">Wonder</span><span className="branch-word word-becoming">Becoming</span></div>;
 }
 
-function ProfileSection({ snapshot, tab, setTab, onShare, onUpdateSettings, authControls }: { snapshot: CustomerSnapshot; tab: ProfileTab; setTab: (tab: ProfileTab) => void; onShare: () => void; onUpdateSettings: (settings: Partial<CustomerSettings>) => void; authControls?: ReactNode }) {
-  return <main className="profile-page"><header className="profile-topbar"><button type="button" className="profile-back" aria-label="Back to discover"><Icon name="arrow" size={18} /></button><div className="profile-wordmark"><strong>MS</strong><span>MarvelSyllabus / Personal archive</span></div><span className="profile-clearance">Clearance 07</span></header><section className="profile-layout"><div className="profile-intro"><span className="profile-eyebrow">Official personnel file</span><h1>Your timeline.<br /><em>Your story.</em></h1><p>Every movie leaves a mark. This is the record of yours.</p><div className="profile-nav-list">{([ ["profile","Profile"], ["timeline","Timeline"], ["share","Share card"], ["settings","Settings"] ] as const).map(([id,label]) => <button type="button" className={tab === id ? "is-active" : ""} key={id} onClick={() => setTab(id)}>{label}<Icon name="arrow" size={13} /></button>)}</div>{authControls && <div className="profile-auth">{authControls}</div>}</div><div className="profile-card-stage"><ProfileIdCard snapshot={snapshot} isTimeline={tab === "timeline"} onFlip={() => setTab(tab === "timeline" ? "profile" : "timeline")} onShare={onShare} onUpdateSettings={onUpdateSettings} />{tab === "share" && <div className="profile-share-panel"><p className="profile-eyebrow">Share by choice</p><h2>Render the record.</h2><p>Choose which personal progress belongs on the image, then send the ID card directly to a social app.</p><button type="button" className="copper-button" onClick={onShare}><Icon name="share" size={15} /> Share ID card</button><label><span>Watched progress</span><input type="checkbox" checked={snapshot.settings.shareWatched} onChange={(event) => onUpdateSettings({ shareWatched: event.target.checked })} /></label><label><span>Viewing streak</span><input type="checkbox" checked={snapshot.settings.shareStreak} onChange={(event) => onUpdateSettings({ shareStreak: event.target.checked })} /></label></div>}{tab === "settings" && <div className="profile-share-panel"><p className="profile-eyebrow">Account settings</p><h2>Keep the archive yours.</h2><label><span>Screening reminders</span><input type="checkbox" checked={snapshot.settings.reminderNotifications} onChange={(event) => onUpdateSettings({ reminderNotifications: event.target.checked })} /></label><label><span>Product updates</span><input type="checkbox" checked={snapshot.settings.productUpdates} onChange={(event) => onUpdateSettings({ productUpdates: event.target.checked })} /></label><p className="profile-note">Google sign-in and security are managed by the identity provider.</p></div>}</div></section></main>;
+function ProfileSection({ snapshot, tab, setTab, onShare, onUpdateSettings }: { snapshot: CustomerSnapshot; tab: ProfileTab; setTab: (tab: ProfileTab) => void; onShare: () => void; onUpdateSettings: (settings: Partial<CustomerSettings>) => void }) {
+  return <main className="profile-page"><header className="profile-topbar"><button type="button" className="profile-back" aria-label="Back to discover"><Icon name="arrow" size={18} /></button><div className="profile-wordmark"><strong>MS</strong><span>MarvelSyllabus / Personal archive</span></div><span className="profile-clearance">Clearance 07</span></header><section className="profile-layout"><div className="profile-intro"><span className="profile-eyebrow">Official personnel file</span><h1>Your timeline.<br /><em>Your story.</em></h1><p>Every movie leaves a mark. This is the record of yours.</p><div className="profile-nav-list">{([ ["profile","Profile"], ["timeline","Timeline"], ["share","Share card"], ["settings","Settings"] ] as const).map(([id,label]) => <button type="button" className={tab === id ? "is-active" : ""} key={id} onClick={() => setTab(id)}>{label}<Icon name="arrow" size={13} /></button>)}</div></div><div className="profile-card-stage"><ProfileIdCard snapshot={snapshot} isTimeline={tab === "timeline"} onFlip={() => setTab(tab === "timeline" ? "profile" : "timeline")} onShare={onShare} onUpdateSettings={onUpdateSettings} />{tab === "share" && <div className="profile-share-panel"><p className="profile-eyebrow">Share by choice</p><h2>Render the record.</h2><p>Choose which personal progress belongs on the image, then send the ID card directly to a social app.</p><button type="button" className="copper-button" onClick={onShare}><Icon name="share" size={15} /> Share ID card</button><label><span>Watched progress</span><input type="checkbox" checked={snapshot.settings.shareWatched} onChange={(event) => onUpdateSettings({ shareWatched: event.target.checked })} /></label><label><span>Viewing streak</span><input type="checkbox" checked={snapshot.settings.shareStreak} onChange={(event) => onUpdateSettings({ shareStreak: event.target.checked })} /></label></div>}{tab === "settings" && <div className="profile-share-panel"><p className="profile-eyebrow">Account settings</p><h2>Keep the archive yours.</h2><label><span>Screening reminders</span><input type="checkbox" checked={snapshot.settings.reminderNotifications} onChange={(event) => onUpdateSettings({ reminderNotifications: event.target.checked })} /></label><label><span>Product updates</span><input type="checkbox" checked={snapshot.settings.productUpdates} onChange={(event) => onUpdateSettings({ productUpdates: event.target.checked })} /></label><p className="profile-note">Google sign-in and security are managed by the identity provider.</p></div>}</div></section></main>;
 }
 
-function BookingModal({ screening, title, rewards, isSignedIn, onClose, onRequireAuth, onConfirm }: { screening: Screening; title?: CatalogTitle; rewards: RewardGrant[]; isSignedIn: boolean; onClose: () => void; onRequireAuth: () => void; onConfirm: (quantity: number, rewardId?: string) => void | Promise<void> }) {
+function BookingModal({ screening, title, rewards, onClose, onConfirm }: { screening: Screening; title?: CatalogTitle; rewards: RewardGrant[]; onClose: () => void; onConfirm: (quantity: number, rewardId?: string) => void | Promise<void> }) {
   const maxQuantity = Math.min(10, remaining(screening));
   const [quantity, setQuantity] = useState(1);
   const [pending, setPending] = useState(false);
@@ -373,14 +323,14 @@ function BookingModal({ screening, title, rewards, isSignedIn, onClose, onRequir
   useEffect(() => { if (reward) setRewardId(reward.id); }, [reward]);
   const activeReward = reward?.id === rewardId ? reward : undefined;
   const discount = activeReward?.kind === "discount" ? Math.round(screening.priceMinor * (activeReward.discountPercent ?? 0) / 100) : activeReward?.kind === "free-ticket" ? screening.priceMinor : 0;
-  return <div className="cinema-modal-backdrop"><section className="cinema-modal" role="dialog" aria-modal="true" aria-label="Booking details"><button className="modal-x" type="button" onClick={onClose} aria-label="Close booking"><Icon name="close" size={18} /></button><p className="cinema-eyebrow">Secure checkout</p><h2>{title?.title ?? screening.title}</h2>{!isSignedIn ? <div className="modal-auth"><Icon name="lock" size={22} /><h3>Sign in to hold your seats.</h3><p>Tickets are saved to your account wallet.</p><button className="copper-button" type="button" onClick={onRequireAuth}>Sign in to continue <Icon name="arrow" size={15} /></button></div> : <><div className="modal-showing"><strong>{formatDate(screening.startsAt, { weekday: "long", day: "numeric", month: "long" })}</strong><span>{formatDate(screening.startsAt, { hour: "numeric", minute: "2-digit" })} – {formatDate(screening.endsAt, { hour: "numeric", minute: "2-digit" })} IST</span><span>{screening.location}</span><b>{Math.floor(seconds / 60).toString().padStart(2,"0")}:{(seconds % 60).toString().padStart(2,"0")} hold</b></div><div className="modal-quantity"><span>Tickets<small>Up to {maxQuantity} per order</small></span><div><button type="button" disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}>−</button><strong>{quantity}</strong><button type="button" disabled={quantity >= maxQuantity} onClick={() => setQuantity((value) => Math.min(maxQuantity, value + 1))}>+</button></div></div>{reward && <label className="modal-reward"><input type="checkbox" checked={Boolean(activeReward)} onChange={(event) => setRewardId(event.target.checked ? reward.id : undefined)} /><span><strong>Apply {reward.title}</strong><small>Automatic · expires {formatDate(reward.expiresAt, { day: "numeric", month: "short" })}</small></span><b>−{money(discount)}</b></label>}<div className="modal-total"><span>Total due</span><strong>{money(Math.max(0, screening.priceMinor * quantity - discount))}</strong></div><p className="modal-note"><Icon name="lock" size={13} /> Razorpay UPI test mode · server verification required</p><button className="copper-button wide" type="button" disabled={!maxQuantity || pending} onClick={async () => { setPending(true); try { await onConfirm(quantity, activeReward?.id); } finally { setPending(false); } }}>{pending ? "Starting checkout…" : <span>Hold seats &amp; continue <Icon name="arrow" size={15} /></span>}</button></>}</section></div>;
+  return <div className="cinema-modal-backdrop"><section className="cinema-modal" role="dialog" aria-modal="true" aria-label="Booking details"><button className="modal-x" type="button" onClick={onClose} aria-label="Close booking"><Icon name="close" size={18} /></button><p className="cinema-eyebrow">Reserve a seat</p><h2>{title?.title ?? screening.title}</h2><div className="modal-showing"><strong>{formatDate(screening.startsAt, { weekday: "long", day: "numeric", month: "long" })}</strong><span>{formatDate(screening.startsAt, { hour: "numeric", minute: "2-digit" })} – {formatDate(screening.endsAt, { hour: "numeric", minute: "2-digit" })} IST</span><span>{screening.location}</span><b>{Math.floor(seconds / 60).toString().padStart(2,"0")}:{(seconds % 60).toString().padStart(2,"0")} hold</b></div><div className="modal-quantity"><span>Tickets<small>Up to {maxQuantity} per order</small></span><div><button type="button" disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))}>−</button><strong>{quantity}</strong><button type="button" disabled={quantity >= maxQuantity} onClick={() => setQuantity((value) => Math.min(maxQuantity, value + 1))}>+</button></div></div>{reward && <label className="modal-reward"><input type="checkbox" checked={Boolean(activeReward)} onChange={(event) => setRewardId(event.target.checked ? reward.id : undefined)} /><span><strong>Apply {reward.title}</strong><small>Automatic · expires {formatDate(reward.expiresAt, { day: "numeric", month: "short" })}</small></span><b>−{money(discount)}</b></label>}<div className="modal-total"><span>Total due</span><strong>{money(Math.max(0, screening.priceMinor * quantity - discount))}</strong></div><p className="modal-note"><Icon name="ticket" size={13} /> No payment needed · the Command Deck confirms your ticket.</p><button className="copper-button wide" type="button" disabled={!maxQuantity || pending} onClick={async () => { setPending(true); try { await onConfirm(quantity, activeReward?.id); } finally { setPending(false); } }}>{pending ? "Reserving…" : <span>Reserve seat <Icon name="arrow" size={15} /></span>}</button></section></div>;
 }
 
 function TitleModal({ title, screenings, onClose, onBook }: { title: CatalogTitle; screenings: Screening[]; onClose: () => void; onBook: (screening: Screening) => void }) {
   return <div className="cinema-modal-backdrop"><section className="title-modal" role="dialog" aria-modal="true" aria-label={`${title.title} details`}><button className="modal-x" type="button" onClick={onClose} aria-label="Close"><Icon name="close" size={18} /></button><Poster title={title} className="title-modal-poster" /><div><p className="cinema-eyebrow">{title.titleType === "series" ? "Series" : "Film"} · Watch order #{title.watchOrder}</p><h2>{title.title}</h2><p className="title-modal-copy">{title.synopsis}</p><div className="title-modal-shows">{screenings.length ? screenings.map((screening) => <div key={screening.id}><span><strong>{formatDate(screening.startsAt, { weekday: "short", day: "numeric", month: "short" })}</strong><small>{formatDate(screening.startsAt, { hour: "numeric", minute: "2-digit" })} · {screening.location}</small></span><button type="button" className="copper-button small" disabled={!bookable(screening)} onClick={() => onBook(screening)}>{bookable(screening) ? "Book" : "Unavailable"}</button></div>) : <p className="muted-copy">No screenings published yet.</p>}</div></div></section></div>;
 }
 
-function App({ authConfigured = false, getToken, signedIn = false, authControls }: AppProps) {
+function App() {
   const [snapshot, setSnapshot] = useState<CustomerSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeNav, setActiveNav] = useState<Nav>("Discover");
@@ -392,121 +342,69 @@ function App({ authConfigured = false, getToken, signedIn = false, authControls 
   const [gameOpen, setGameOpen] = useState(false);
   const [meterOpen, setMeterOpen] = useState(false);
   const [toast, setToast] = useState<{ message: string; tone: ToastTone } | null>(null);
-  // The preview sign-in only exists on a Vite dev server. A production build
-  // without Clerk must be a signed-out app, not a fake account.
-  const previewAvailable = import.meta.env.DEV && !authConfigured;
-  const [demoSignedIn, setDemoSignedIn] = useState(previewAvailable);
-  const isSignedIn = authConfigured ? signedIn : previewAvailable && demoSignedIn;
-  const [razorpayKeyId, setRazorpayKeyId] = useState<string | null>(null);
+  const [config, setConfig] = useState<PublicConfig | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let active = true;
     setLoading(true);
-    loadCustomerSnapshot(getToken)
+    loadCustomerSnapshot()
       .then((data) => { if (active) setSnapshot(data); })
       .catch(() => { if (active) setSnapshot(unavailableSnapshot(["snapshot_failed"])); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [reloadKey]);
   useEffect(() => {
-    loadPublicConfig().then((config) => { if (config.razorpayKeyId) setRazorpayKeyId(config.razorpayKeyId); }).catch(() => {});
+    loadPublicConfig().then(setConfig).catch(() => {});
   }, []);
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(null), 3500); return () => window.clearTimeout(timer); }, [toast]);
 
   const catalog = useMemo(() => sortCatalog(snapshot?.catalog ?? []), [snapshot?.catalog]);
   const activeMovieIndex = activeMovie ?? 0;
   const showToast = (message: string, tone: ToastTone = "default") => setToast({ message, tone });
-  const requireAuth = () => {
-    if (!authConfigured) {
-      if (previewAvailable) {
-        setDemoSignedIn(true);
-        showToast("Preview account signed in.", "success");
-      } else {
-        showToast("Sign-in is not configured on this deployment.", "danger");
-      }
-      return;
-    }
-    showToast("Use the sign-in control to continue.");
-  };
   const selectMovie = (index: number) => setActiveMovie(index);
   const openBookingForTitle = (title: CatalogTitle) => { const screening = snapshot?.screenings.filter((entry) => entry.titleId === title.id).sort((a,b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)).find(bookable); if (!screening) { showToast(title.active ? "No bookable screening is available yet." : "This title is Upcoming and cannot be booked."); return; } setBookingScreening(screening); };
   const toggleSaved = (title: CatalogTitle) => setSaved((current) => { const next = new Set(current); if (next.has(title.id)) next.delete(title.id); else next.add(title.id); return next; });
-  const toggleWatched = async (item: Pick<WatchedItem, "titleId" | "seasonNumber" | "episodeNumber">, watched: boolean) => { if (!snapshot) return; if (!isSignedIn) { requireAuth(); return; } const previous = snapshot; setSnapshot((current) => current ? { ...current, progress: watched ? [...current.progress.filter((entry) => watchedKey(entry) !== watchedKey(item)), { ...item, watchedAt: new Date().toISOString() }] : current.progress.filter((entry) => watchedKey(entry) !== watchedKey(item)) } : current); try { await saveWatchedProgress(item, watched, getToken); showToast(watched ? "Added to your archive." : "Removed from your archive.", "success"); } catch { setSnapshot(previous); showToast("Could not save watch progress.", "danger"); } };
+  const toggleWatched = async (item: Pick<WatchedItem, "titleId" | "seasonNumber" | "episodeNumber">, watched: boolean) => { if (!snapshot) return; const previous = snapshot; setSnapshot((current) => current ? { ...current, progress: watched ? [...current.progress.filter((entry) => watchedKey(entry) !== watchedKey(item)), { ...item, watchedAt: new Date().toISOString() }] : current.progress.filter((entry) => watchedKey(entry) !== watchedKey(item)) } : current); try { await saveWatchedProgress(item, watched); showToast(watched ? "Added to your archive." : "Removed from your archive.", "success"); } catch { setSnapshot(previous); showToast("Could not save watch progress.", "danger"); } };
+  // Manual booking: hold the seats, create a pending booking, and let the
+  // Command Deck confirm it. No payment provider and no sign-in.
   const confirmBooking = async (quantity: number, rewardId?: string) => {
     if (!snapshot || !bookingScreening) return;
-    if (!authConfigured) {
-      requireAuth();
-      return;
-    }
-    const token = await getToken?.();
-    const key = razorpayKeyId ?? (import.meta.env.VITE_RAZORPAY_KEY_ID as string | undefined);
-    if (!token) {
-      showToast("Sign in to hold your seats.", "danger");
-      return;
-    }
+    const screening = bookingScreening;
     try {
-      const hold = await createBookingHold(token, bookingScreening.id, quantity, rewardId);
-      const order = await createRazorpayOrder(token, hold.holdId);
-      if (order.free) {
-        setBookingScreening(null);
-        setActiveNav("Ticket");
-        showToast("Reward applied. Your ticket is in the wallet.", "success");
-        setSnapshot(await loadCustomerSnapshot(getToken));
-        return;
-      }
-      if (!key || !order.order_id) {
-        showToast("Checkout is not configured for this deployment.", "danger");
-        return;
-      }
-      const Razorpay = await loadRazorpayCheckout();
-      const checkout = new Razorpay({
-        key,
-        amount: order.amount,
-        currency: order.currency,
-        name: "MarvelSyllabus",
-        description: bookingScreening.title,
-        order_id: order.order_id,
-        handler: (payment) => {
-          // Clerk tokens outlive nothing: a checkout that sits open for a
-          // minute must not verify with the token minted before it opened.
-          void (async () => {
-            const freshToken = await getToken?.();
-            if (!freshToken) throw new Error("session_expired");
-            await verifyRazorpayPayment(freshToken, payment);
-            setBookingScreening(null);
-            setActiveNav("Ticket");
-            showToast("Payment verified. Your ticket is in the wallet.", "success");
-            setSnapshot(await loadCustomerSnapshot(getToken));
-          })().catch(() => showToast("Payment was received but could not be verified. Contact support.", "danger"));
-        },
-        modal: { ondismiss: () => showToast("Checkout was cancelled.") },
-      });
-      checkout.on("payment.failed", () => showToast("Payment failed. Your hold will expire automatically.", "danger"));
-      checkout.open();
+      const hold = await createBookingHold(null, screening.id, quantity, rewardId);
+      const reservation = await reserveSeats(null, hold.holdId);
+      setBookingScreening(null);
+      setActiveNav("Ticket");
+      showToast(
+        reservation.manual
+          ? `Seat reserved · ${reservation.orderCode ?? "order"} awaits confirmation in the Command Deck.`
+          : "Reward applied. Your ticket is in the wallet.",
+        "success",
+      );
+      setSnapshot(await loadCustomerSnapshot());
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to start checkout.";
-      showToast(message === "amount_below_minimum" ? "The ticket total must be at least ₹1.00."
-        : message === "reward_unavailable" ? "That reward is no longer available."
-        : "Unable to start checkout.", "danger");
+      const message = error instanceof Error ? error.message : "reserve_failed";
+      showToast(
+        message === "sold_out" ? "That screening just sold out."
+          : message === "not_on_sale" ? "Booking is closed for this screening."
+          : message === "reward_unavailable" ? "That reward is no longer available."
+          : "Unable to reserve seats. Try again.",
+        "danger",
+      );
     }
   };
   const updateSettings = (settings: Partial<CustomerSettings>) => {
     const previous = snapshot;
     setSnapshot((current) => current ? { ...current, settings: { ...current.settings, ...settings } } : current);
-    void saveCustomerSettings(settings, getToken).catch(() => {
+    void saveCustomerSettings(settings).catch(() => {
       setSnapshot(previous);
       showToast("Could not save account settings.", "danger");
     });
   };
   const handleRoundComplete = async () => {
-    const token = await getToken?.();
-    if (!token) {
-      showToast("Sign in to save this round.", "danger");
-      return;
-    }
     try {
-      const state = await completeRewardRound(token);
+      const state = await completeRewardRound();
       setSnapshot((current) => current ? { ...current, campaign: state.campaign, rewards: state.grants } : current);
       showToast("Round saved to your account.", "success");
     } catch {
@@ -514,13 +412,8 @@ function App({ authConfigured = false, getToken, signedIn = false, authControls 
     }
   };
   const claimReward = async () => {
-    const token = await getToken?.();
-    if (!token) {
-      setGameOpen(false);
-      return;
-    }
     try {
-      const state = await claimRewardOnServer(token);
+      const state = await claimRewardOnServer();
       setSnapshot((current) => current ? { ...current, campaign: state.campaign, rewards: state.grants } : current);
       setGameOpen(false);
       showToast("Reward unlocked in your wallet.", "success");
@@ -561,17 +454,14 @@ function App({ authConfigured = false, getToken, signedIn = false, authControls 
   const bookingTitle = bookingScreening ? catalog.find((title) => title.id === bookingScreening.titleId) : undefined;
   const openRewards = async () => {
     if (!snapshot.campaign.id) { showToast("No reward campaign is running right now."); return; }
-    if (!snapshot.campaign.eligible) { showToast("Rewards unlock after a confirmed paid ticket."); return; }
-    if (!isSignedIn) { requireAuth(); return; }
+    if (!snapshot.campaign.eligible) { showToast("Rewards unlock after a confirmed ticket."); return; }
     if (snapshot.campaign.completedPlays >= snapshot.campaign.requiredPlays) {
       setActiveNav("Ticket");
       showToast("Your reward is already in the wallet.");
       return;
     }
-    const token = await getToken?.();
-    if (!token) { requireAuth(); return; }
     try {
-      await startRewardRound(token);
+      await startRewardRound();
       setGameOpen(true);
     } catch (error) {
       const message = error instanceof Error ? error.message : "";
@@ -583,14 +473,14 @@ function App({ authConfigured = false, getToken, signedIn = false, authControls 
     <div className="cinematic-glow" />
     {snapshot.source === "demo" && <div className="data-notice" role="status">Preview data · the local API is not running. Start <code>npm run dev:pages</code> for live catalog, wallet and rewards.</div>}
     {snapshot.source === "api" && snapshot.issues && snapshot.issues.length > 0 && <div className="data-notice warning" role="status">Some account data could not be loaded ({snapshot.issues.join(", ")}). <button type="button" onClick={() => setReloadKey((value) => value + 1)}>Retry</button></div>}
-    {!authConfigured && !previewAvailable && <div className="data-notice warning" role="status">Sign-in is not configured for this deployment. Set <code>VITE_CLERK_PUBLISHABLE_KEY</code> in the hosting project and redeploy.</div>}
+    {config?.authMode === "demo" && <div className="data-notice" role="status">Demo mode — booking is open to everyone and every reservation is confirmed in the Command Deck.</div>}
     {activeNav === "Discover" && <DiscoverSection snapshot={snapshot} titles={catalog} activeMovie={activeMovieIndex} saved={saved} onSelect={selectMovie} onBook={openBookingForTitle} onSave={toggleSaved} />}
     {activeNav === "Streak" && <StreakSection snapshot={snapshot} titles={catalog} onShare={shareCard} onMeter={() => setMeterOpen(true)} onOpenTitle={setSelectedTitle} />}
     {activeNav === "Ticket" && <TicketSection snapshot={snapshot} catalog={catalog} onPlay={openRewards} onOpenBooking={(booking) => showToast(`${booking.orderCode} is ready to scan.`)} onOpenTitle={setSelectedTitle} />}
-    {activeNav === "Profile" && <ProfileSection snapshot={snapshot} tab={profileTab} setTab={setProfileTab} onShare={shareCard} onUpdateSettings={updateSettings} authControls={authControls} />}
+    {activeNav === "Profile" && <ProfileSection snapshot={snapshot} tab={profileTab} setTab={setProfileTab} onShare={shareCard} onUpdateSettings={updateSettings} />}
     <nav className="cinema-nav" aria-label="Primary navigation">{([ ["Discover", "home"], ["Streak", "streak"], ["Ticket", "ticket"], ["Profile", "profile"] ] as const).map(([label, icon]) => <button key={label} type="button" aria-current={activeNav === label ? "page" : undefined} className={activeNav === label ? "is-active" : ""} onClick={() => setActiveNav(label)}><Icon name={icon} size={19} /><span>{label}</span></button>)}</nav>
     {selectedTitle && <TitleModal title={selectedTitle} screenings={selectedShows} onClose={() => setSelectedTitle(null)} onBook={(screening) => { setSelectedTitle(null); setBookingScreening(screening); }} />}
-    {bookingScreening && <BookingModal screening={bookingScreening} title={bookingTitle} rewards={snapshot.rewards} isSignedIn={isSignedIn} onClose={() => setBookingScreening(null)} onRequireAuth={requireAuth} onConfirm={confirmBooking} />}
+    {bookingScreening && <BookingModal screening={bookingScreening} title={bookingTitle} rewards={snapshot.rewards} onClose={() => setBookingScreening(null)} onConfirm={confirmBooking} />}
     {meterOpen && <div className="meter-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setMeterOpen(false); }}><section className="meter-modal"><button type="button" className="modal-x" onClick={() => setMeterOpen(false)} aria-label="Close"><Icon name="close" size={18} /></button><p className="cinema-eyebrow">Marvel Meter</p><h2>Arc Reactor</h2><p>Level 4 movie hero</p><div className="meter-progress-card"><div className="meter-reactor"><Icon name="streak" size={28} /></div><div><strong>{streakLength(snapshot.progress) * 120} XP</strong><small>1,000 XP</small><span><i /></span></div></div><div className="meter-levels"><span>03 Agent</span><strong>04 Reactor</strong><span>05 Vibranium</span></div><button type="button" className="copper-button" onClick={shareCard}><Icon name="share" size={15} /> Share level</button></section></div>}
     {gameOpen && <Suspense fallback={<div className="game-loading-screen"><span>Temporal Loom</span><strong>Loading the signal…</strong></div>}><TemporalLoom completedPlays={snapshot.campaign.completedPlays} requiredPlays={snapshot.campaign.requiredPlays} demoMode={snapshot.source === "demo"} onComplete={handleRoundComplete} onClaim={claimReward} onClose={() => setGameOpen(false)} /></Suspense>}
     {toast && <div className={`cinema-toast ${toast.tone}`} role="status"><Icon name={toast.tone === "success" ? "check" : toast.tone === "danger" ? "close" : "star"} size={15} />{toast.message}<button type="button" onClick={() => setToast(null)} aria-label="Dismiss"><Icon name="close" size={13} /></button></div>}

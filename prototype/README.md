@@ -14,8 +14,8 @@ The separate **Title catalog** and **Customer dashboard** surfaces use Cloudflar
 
 1. Create a Neon Postgres database and run `db/001_catalog.sql` once in the Neon SQL editor or with `psql`.
 2. Create an S3-compatible object-storage bucket (the planned Neon Object Storage integration) and provision server-side endpoint, region, bucket, access-key ID, and secret access key. Do not use a browser-visible storage credential.
-3. Configure Clerk Google sign-in and the Clerk JWT template named `platform-api`. The template must include a server-controlled `role` claim populated from trusted Clerk public metadata; only the operator should grant `admin`. Configure `CLERK_ISSUER`, `CLERK_JWKS_URL`, and, if used, `CLERK_AUDIENCE`.
-4. Set Cloudflare Pages environment values/secrets: `DATABASE_URL`, `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_BUCKET`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `CLERK_ISSUER`, `CLERK_JWKS_URL`, and optional `CLERK_AUDIENCE`. Set `VITE_CLERK_PUBLISHABLE_KEY` and `VITE_RAZORPAY_KEY_ID` as Pages build variables. The database, object-storage, and Razorpay secrets must never use the `VITE_` prefix.
+3. Configure Clerk Google sign-in and the Clerk JWT template named `platform-api`. The template must include a server-controlled `role` claim populated from trusted Clerk public metadata; only the operator should grant `admin`. Configure `CLERK_ISSUER`, `CLERK_JWKS_URL`, and, if used, `CLERK_AUDIENCE`. Skip this step to run in demo mode with guest bookings.
+4. Set Cloudflare Pages environment values/secrets: `DATABASE_URL`, `OBJECT_STORAGE_ENDPOINT`, `OBJECT_STORAGE_REGION`, `OBJECT_STORAGE_BUCKET`, `OBJECT_STORAGE_ACCESS_KEY_ID`, `OBJECT_STORAGE_SECRET_ACCESS_KEY`, and, only when using the hosted checkout, `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `PAYMENTS_MODE=razorpay`. Add `CLERK_ISSUER`, `CLERK_JWKS_URL`, and optional `CLERK_AUDIENCE` when sign-in is enabled. The database, object-storage, and Razorpay secrets must never use the `VITE_` prefix.
 5. Build/deploy with `npm run build` and `npm run deploy:pages -- --project-name <your-pages-project>`. The Cloudflare project must be configured for this Pages build output and Functions directory.
 6. After the API is deployed, provide a short-lived admin Clerk JWT in `CATALOG_ADMIN_TOKEN` and run the one-time import from the repository root:
 
@@ -35,7 +35,13 @@ Razorpay test keys are split the way Vite requires:
 - `prototype/.env` (gitignored) holds only `VITE_RAZORPAY_KEY_ID`, because every `VITE_*` value is inlined into the browser bundle.
 - `.env.example` and `prototype/.env.example` document the shape without real values.
 
-Rotating a key means updating `.env`, `prototype/.env`, and `prototype/.dev.vars`, then rebuilding and restarting both dev servers — Vite reads `VITE_*` once at startup, so a running dev server keeps serving the old key id.
+Rotating a key means updating `.env`, `prototype/.env`, and `prototype/.dev.vars`, then rebuilding and restarting both dev servers - Vite reads `VITE_*` once at startup, so a running dev server keeps serving the old key id.
+
+### Demo mode (no sign-in, no payment)
+
+This build is wired for a guest booking test, not a public launch. With `CLERK_ISSUER` and `CLERK_JWKS_URL` unset the worker runs in **demo mode**: it trusts the browser's `x-customer-id` guest id for customer routes and the `x-demo-admin: 1` header for admin routes. With `PAYMENTS_MODE` unset it also runs **manual payments**: a reservation writes a `payment_pending` booking instead of opening Razorpay, and the booking becomes a scannable ticket only after the Command Deck confirms it.
+
+Both switches are automatic and deliberately fail closed: set the two Clerk values and a verified JWT is required again; set `PAYMENTS_MODE=razorpay` (plus both Razorpay keys) and the hosted checkout returns. Do not leave demo mode on a public deployment — anyone can call the admin routes.
 
 For hot reload with a live API, keep `npm run dev:pages` running and start `npm run dev` in a second terminal; Vite proxies `/api` to `http://127.0.0.1:8788`. `npm run dev` on its own has no backend unless that worker is up (the proxied target is `API_ORIGIN` in `vite.config.ts`).
 
@@ -51,19 +57,18 @@ Vercel does **not** run `functions/api/[[path]].ts` (that is a Cloudflare Pages 
 4. Add the environment variables below for **Production** and **Preview**.
 5. Apply every migration in `db/` (001 through 006) to the same Neon database.
 6. Deploy, then open `https://<project>.vercel.app/api/health`. It must answer `{"ok":true,"database":true,...}`. A 404 means the function was not built; `ok:false` with `database:false` means `DATABASE_URL` is wrong or unreachable.
-7. Sign in, then confirm the preview-data notice is gone. If it still says the API is unavailable, `/api/health` is failing or `VITE_CLERK_PUBLISHABLE_KEY` was missing at build time (Vite inlines it, so change it and redeploy; restarting is not enough).
+7. Open the app and book a screening. In demo mode it reserves a seat as a guest; the Command Deck's Bookings tab then confirms it, and the wallet flips to a scannable ticket. If the preview-data notice is still showing, `/api/health` is failing.
 
 | Variable | Needed for | Notes |
 | --- | --- | --- |
 | `DATABASE_URL` | API | Neon pooled connection string |
-| `CLERK_ISSUER`, `CLERK_JWKS_URL` | API auth | Optional `CLERK_AUDIENCE=platform-api` |
+| `CLERK_ISSUER`, `CLERK_JWKS_URL` | API auth | Leave unset for demo mode; set both to require verified Clerk JWTs |
 | `OWNER_EMAILS` | first admin | Comma-separated verified Google emails granted `admin` |
+| `PAYMENTS_MODE` | checkout | `razorpay` for hosted checkout; unset (default) books `payment_pending` for manual confirmation |
 | `OBJECT_STORAGE_*` | artwork upload | Endpoint, region, bucket, access key id, secret |
-| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | checkout | Server-side only |
+| `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | hosted checkout | Server-side only, and only read when `PAYMENTS_MODE=razorpay` |
 | `CORS_ORIGINS` | split hosting | Comma-separated frontend origins; only needed when the API is on a different domain |
-| `VITE_CLERK_PUBLISHABLE_KEY` | build | Inlined into the bundle; without it production renders signed-out with a configuration notice |
 | `VITE_API_BASE_URL` | build | Optional absolute API origin (for example a Cloudflare Worker). Leave empty for same-origin `/api` |
-| `VITE_RAZORPAY_KEY_ID` | build | Optional public Razorpay key id; `/api/config` is preferred and overrides it |
 
 The admin Command Deck deploys the same way from `admin/` (its own `scripts/build-api.mjs` generates `admin/api/[...path].js` from the same adapter), so both Vercel projects read one database and one set of rules.
 
@@ -78,20 +83,17 @@ npm run upload:posters                # upload artwork/<title-id>.jpg and set po
 
 The script reads `DATABASE_URL` and `OBJECT_STORAGE_*` from `.dev.vars`, `.env.local` or the environment, skips rows that already match, and is safe to re-run after adding titles. Without it every card falls back to a letter tile.
 
-## Checkout
+## Checkout and confirmation
 
-Booking is hold → Razorpay order → server-side signature check → wallet:
+Manual mode is the default (`PAYMENTS_MODE` unset):
 
 - `POST /api/booking-holds` reserves seats for ten minutes, bounded by what is actually left in the hall.
-- `POST /api/create-order` writes the `payment_pending` booking and creates the Razorpay order server-side. The amount is recomputed from the database, never taken from the browser.
-- `POST /api/verify-payment` recomputes the HMAC-SHA256 signature over `<order_id>|<payment_id>` with `RAZORPAY_KEY_SECRET` and only then marks the booking `confirmed`.
-- `GET /api/bookings` is the account wallet and it is authoritative. Unpaid `payment_pending` rows stay visible to their owner and are labelled "Payment pending"; door staff reject anything that is not `confirmed`.
+- `POST /api/create-order` writes a `payment_pending` booking with `payment_reference = 'manual'` and returns `{ manual: true, bookingId, orderCode }`. The amount is recomputed from the database, never taken from the browser.
+- `POST /api/admin/bookings/:id/confirm` (Command Deck → Bookings → **Confirm**) flips it to `confirmed`, redeems the reward held for it, and logs the activity. A booking that is not `payment_pending` answers `409 booking_not_pending`.
+- `GET /api/bookings` is the account wallet and it is authoritative. Pending rows stay visible to their owner and are labelled "Awaiting confirmation"; they are not scannable, and door staff reject anything that is not `confirmed`.
+- Refund and cancel still only flip the booking status and invalidate the ticket.
 
-Still open before real money moves:
-
-- There is no Razorpay webhook, so confirmation depends on the browser finishing the callback. A payment completed out-of-band needs manual reconciliation.
-- The admin refund/cancel actions only flip the booking status and invalidate the ticket. They do **not** call the Razorpay refund API, and the payment id is not stored, so money has to be refunded from the Razorpay dashboard.
-- Screening inventory is checked at hold time and again at order time, but there is no reservation lock across the two calls.
+Set `PAYMENTS_MODE=razorpay` (with both Razorpay keys) to restore the hosted checkout: `create-order` returns a real Razorpay order and `POST /api/verify-payment` recomputes the HMAC-SHA256 signature over `<order_id>|<payment_id>` before confirming. That path still has no webhook, so a payment completed out-of-band needs manual reconciliation.
 
 ## Local data
 

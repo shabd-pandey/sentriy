@@ -38,6 +38,7 @@ import {
   checkInStaffTicket as checkInStaffTicketRemote,
   refundBooking as refundBookingRemote,
   cancelBooking as cancelBookingRemote,
+  confirmBooking as confirmBookingRemote,
   releaseHold as releaseHoldRemote,
   importCatalog as importCatalogRemote,
   type AdminBooking,
@@ -77,7 +78,7 @@ import {
 type TabId = "activity" | "catalog" | "screenings" | "bookings" | "banners" | "rewards" | "settings" | "system";
 
 export interface LiveStore {
-  token: string;
+  token: string | null;
   refresh: () => Promise<void>;
 }
 
@@ -174,21 +175,13 @@ function OutlineButton({ children, disabled, onClick, tone = "default" }: { chil
   return <button type="button" className={`cd-outline ${tone === "danger" ? "outline-danger" : ""} ${tone === "danger-ghost" ? "outline-danger-ghost" : ""}`} disabled={disabled} onClick={onClick}>{children}</button>;
 }
 
-export interface DeckAuth {
-  authConfigured: boolean;
-  signedIn?: boolean;
-  getToken?: () => Promise<string | null>;
-  authControls?: ReactNode;
-}
-
-export default function CommandDeck({ authConfigured = false, signedIn = false, getToken, authControls }: DeckAuth) {
+export default function CommandDeck() {
   const [snapshot, setSnapshot] = useState<AdminSnapshot>(() => loadAdminSnapshot());
   const [tab, setTab] = useState<TabId>("activity");
   const [clock, setClock] = useState(Date.now());
   const [liveToken, setLiveToken] = useState<string | null>(null);
   const [liveState, setLiveState] = useState<"idle" | "loading" | "live" | "forbidden" | "error" | "demo">("idle");
   const [liveError, setLiveError] = useState("");
-  const [previewRequested, setPreviewRequested] = useState(false);
 
   useEffect(() => { if (snapshot.source === "demo") persistAdminSnapshot(snapshot); }, [snapshot]);
   useEffect(() => {
@@ -198,7 +191,7 @@ export default function CommandDeck({ authConfigured = false, signedIn = false, 
 
   const commit = (next: AdminSnapshot) => setSnapshot(next);
 
-  const refreshLive = useCallback(async (token: string) => {
+  const refreshLive = useCallback(async (token: string | null) => {
     const [catalog, screenings, profile, banners, activity, campaigns] = await Promise.all([
       fetchCatalog(),
       fetchScreenings(),
@@ -230,26 +223,17 @@ export default function CommandDeck({ authConfigured = false, signedIn = false, 
     }));
   }, []);
 
+  // Sign-in is disabled on this deployment, so the deck always loads the live
+  // shared backend. The API identifies it by `x-demo-admin` (see api.ts).
   useEffect(() => {
-    if (!authConfigured || !signedIn || !getToken || previewRequested) return;
     let cancelled = false;
     setLiveState("loading");
     setLiveError("");
-    void getToken()
-      .then((token) => {
-        if (cancelled || !token) {
-          if (!cancelled) {
-            setLiveState("demo");
-            setLiveError("Signed in without an API token. Showing preview data.");
-          }
-          return null;
-        }
-        return refreshLive(token).then(() => {
-          if (!cancelled) {
-            setLiveToken(token);
-            setLiveState("live");
-          }
-        });
+    void refreshLive(null)
+      .then(() => {
+        if (cancelled) return;
+        setLiveToken(null);
+        setLiveState("live");
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
@@ -263,38 +247,9 @@ export default function CommandDeck({ authConfigured = false, signedIn = false, 
         }
       });
     return () => { cancelled = true; };
-  }, [authConfigured, signedIn, getToken, previewRequested, refreshLive]);
+  }, [refreshLive]);
 
-  const live = liveState === "live" && liveToken ? { token: liveToken, refresh: () => refreshLive(liveToken) } : null;
-
-  if (authConfigured && !signedIn && !previewRequested) {
-    return (
-      <div className="cd-shell">
-        <header className="cd-topbar">
-          <span className="cd-brand">
-            <span className="cd-brand-mark">M</span>
-            <span><strong>MARVELSYLLABUS</strong><small>COMMAND DECK · BURDEN WITH GLORIOUS SYLLABUS</small></span>
-          </span>
-          {authControls}
-        </header>
-        <main className="cd-content">
-          <section className="cd-section cd-gate">
-            <p className="cd-eyebrow">OPERATOR ACCESS</p>
-            <h1>Sign in as an admin</h1>
-            <p>The Command Deck reads the shared catalog, screenings, banners, rewards, and activity. Public sign-up grants customer access only.</p>
-            <div className="cd-gate-actions">
-              {authControls}
-              <button type="button" className="cd-outline" onClick={() => setPreviewRequested(true)}>Explore preview data instead</button>
-            </div>
-          </section>
-        </main>
-        <footer className="cd-footer">
-          <span>MarvelSyllabus Command Deck · Burden with Glorious Syllabus</span>
-          <span>Asia/Kolkata · shared catalog, screenings, banners, rewards &amp; activity</span>
-        </footer>
-      </div>
-    );
-  }
+  const live = liveState === "live" ? { token: liveToken, refresh: () => refreshLive(liveToken) } : null;
 
   const orderedCatalog = useMemo(() => sortCatalog(snapshot.catalog), [snapshot.catalog]);
   const screeningList = useMemo(
@@ -321,7 +276,6 @@ export default function CommandDeck({ authConfigured = false, signedIn = false, 
           <div className="cd-demo-ribbon"><i /> Preview data · every change stays in this browser</div>
         )}
         {(liveError || liveState === "forbidden") && <span className="cd-live-error" role="status">{liveError}</span>}
-        {authConfigured && authControls}
         {snapshot.source === "demo" && <button type="button" className="cd-reset" onClick={() => { if (window.confirm("Reset all demo data to the original seed?")) setSnapshot(resetAdminData()); }}>Reset demo</button>}
       </header>
 
@@ -952,9 +906,10 @@ function BookingsTab({ snapshot, live }: { snapshot: AdminSnapshot; live: LiveSt
 
   const list = [...snapshot.screenings].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
   const selected = list.find((item) => item.id === screeningId);
+  const pendingCount = bookings.filter((booking) => booking.status === "payment_pending").length;
 
   const load = useCallback((id: string, token: string | null) => {
-    if (!id || !token) {
+    if (!id) {
       setBookings([]);
       setHolds([]);
       setCheckins([]);
@@ -994,14 +949,23 @@ function BookingsTab({ snapshot, live }: { snapshot: AdminSnapshot; live: LiveSt
     }
   }, [live, screeningId, load]);
 
-  const mutateBooking = (bookingId: string, action: "refund" | "cancel") => {
+  const mutateBooking = (bookingId: string, action: "confirm" | "refund" | "cancel") => {
     if (!live) return;
-    if (!window.confirm(`${action === "refund" ? "Refund" : "Cancel"} this booking? Its ticket becomes invalid immediately.`)) return;
+    const label = action === "confirm" ? "Confirm" : action === "refund" ? "Refund" : "Cancel";
+    const prompt = action === "confirm"
+      ? "Confirm this booking? It becomes a scannable ticket at the door."
+      : `${label} this booking? Its ticket becomes invalid immediately.`;
+    if (!window.confirm(prompt)) return;
     setBusy(true);
     setError("");
-    void (action === "refund" ? refundBookingRemote(live.token, bookingId) : cancelBookingRemote(live.token, bookingId))
+    const request = action === "confirm"
+      ? confirmBookingRemote(live.token, bookingId)
+      : action === "refund"
+        ? refundBookingRemote(live.token, bookingId)
+        : cancelBookingRemote(live.token, bookingId);
+    void request
       .then(() => {
-        setNotice(`Booking ${action === "refund" ? "refunded" : "cancelled"}.`);
+        setNotice(`Booking ${action === "confirm" ? "confirmed" : action === "refund" ? "refunded" : "cancelled"}.`);
         load(screeningId, live.token);
         void live.refresh();
       })
@@ -1056,7 +1020,7 @@ function BookingsTab({ snapshot, live }: { snapshot: AdminSnapshot; live: LiveSt
       <div className="cd-section-header">
         <div><p className="cd-eyebrow">TICKETS &amp; DOORS</p><h1>Bookings</h1><p>Every booking, hold, and door scan for one screening — plus the staff validate/check-in tool.</p></div>
       </div>
-      {!live && <div className="cd-notice" role="status">Sign in as an admin to load live bookings, holds, and door counts. Preview mode shows the schedule only.</div>}
+      {!live && <div className="cd-notice" role="status">The Command Deck could not reach the shared backend. Preview mode shows the schedule only.</div>}
       {notice && <div className="cd-notice" role="status">{notice}</div>}
       {error && <div className="cd-error" role="alert">{error}</div>}
       <div className="cd-toolbar">
@@ -1072,7 +1036,7 @@ function BookingsTab({ snapshot, live }: { snapshot: AdminSnapshot; live: LiveSt
 
       <div className="cd-detail-grid">
         <section>
-          <h4 className="cd-h4">Confirmed bookings ({bookings.length})</h4>
+          <h4 className="cd-h4">Bookings ({bookings.length}){pendingCount > 0 && <span className="cd-count" style={{ marginLeft: 10 }}>{pendingCount} awaiting confirmation</span>}</h4>
           {bookings.length ? (
             <table className="cd-mini-table">
               <thead><tr><th>Order</th><th>Qty</th><th>Status</th><th>Ticket</th><th /></tr></thead>
@@ -1080,12 +1044,15 @@ function BookingsTab({ snapshot, live }: { snapshot: AdminSnapshot; live: LiveSt
                 <tr key={booking.id}>
                   <td><code>{booking.orderCode}</code><small>{booking.amountMinor != null ? money(booking.amountMinor) : ""} · {booking.userId.slice(0, 12)}…</small></td>
                   <td>{booking.quantity}</td>
-                  <td><span className={`cd-chip ${booking.status === "confirmed" ? "chip-active" : "chip-cancelled"}`}>{booking.status}</span></td>
+                  <td><span className={`cd-chip ${booking.status === "confirmed" ? "chip-active" : booking.status === "payment_pending" ? "chip-upcoming" : "chip-cancelled"}`}>{booking.status === "payment_pending" ? "awaiting confirmation" : booking.status}</span></td>
                   <td><span className={`cd-chip ${booking.ticketStatus === "valid" ? "chip-active" : booking.ticketStatus === "used" ? "chip-upcoming" : "chip-cancelled"}`}>{booking.ticketStatus}</span></td>
-                  <td>{booking.status === "confirmed" && <span className="cd-actions">
+                  <td>{booking.status === "payment_pending" ? <span className="cd-actions">
+                    <button type="button" className="cd-mini" disabled={busy} onClick={() => mutateBooking(booking.id, "confirm")}>Confirm</button>
+                    <button type="button" className="cd-mini danger" disabled={busy} onClick={() => mutateBooking(booking.id, "cancel")}>Cancel</button>
+                  </span> : booking.status === "confirmed" ? <span className="cd-actions">
                     <button type="button" className="cd-mini" disabled={busy} onClick={() => mutateBooking(booking.id, "refund")}>Refund</button>
                     <button type="button" className="cd-mini danger" disabled={busy} onClick={() => mutateBooking(booking.id, "cancel")}>Cancel</button>
-                  </span>}</td>
+                  </span> : null}</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -1205,12 +1172,13 @@ function SystemTab({ snapshot, onCommit, live }: { snapshot: AdminSnapshot; onCo
         <table className="cd-mini-table">
           <thead><tr><th>Step</th><th>Where</th><th>Done when</th></tr></thead>
           <tbody>
-            <tr><td>Migrate Neon (001 → 004, in order)</td><td><code>prototype/db/</code></td><td>All four files applied to the Singapore project</td></tr>
-            <tr><td>Set Pages secrets (no VITE_ prefix)</td><td>Cloudflare → both Pages projects</td><td><code>DATABASE_URL</code>, <code>OBJECT_STORAGE_*</code>, <code>CLERK_*</code>, <code>RAZORPAY_*</code> present</td></tr>
-            <tr><td>Clerk JWT template <code>platform-api</code></td><td>Clerk dashboard</td><td><code>role</code> claim flows from public metadata; owner has <code>admin</code></td></tr>
-            <tr><td>Deploy both web apps</td><td><code>frame-catalog</code> + <code>marvelsyllabus-command-deck</code></td><td><code>npm run build</code> green; game chunk lazy-loaded</td></tr>
+            <tr><td>Migrate Neon (001 → 006, in order)</td><td><code>prototype/db/</code></td><td>Every migration applied to the production project</td></tr>
+            <tr><td>Set Vercel env vars</td><td>Project → Settings → Environment Variables</td><td><code>DATABASE_URL</code> and <code>OBJECT_STORAGE_*</code> present for Production and Preview</td></tr>
+            <tr><td>Demo mode (no Clerk)</td><td>Leave <code>CLERK_ISSUER</code> / <code>CLERK_JWKS_URL</code> unset</td><td>Customer app books as a guest; this deck confirms pending bookings via <code>x-demo-admin</code></td></tr>
+            <tr><td>Manual payments</td><td>Leave <code>PAYMENTS_MODE</code> unset</td><td>Bookings arrive as <code>payment_pending</code> and Confirm turns them into scannable tickets</td></tr>
+            <tr><td>Deploy both apps</td><td>Vercel → customer prototype + admin command deck</td><td><code>npm run build</code> green; <code>/api/health</code> reports <code>database: true</code></td></tr>
             <tr><td>Import catalog once</td><td>This tab ↑</td><td>Titles visible as Upcoming; preview ribbon gone on customer app</td></tr>
-            <tr><td>Activate + schedule + reconcile</td><td>Catalog → Screenings → Bookings</td><td>Hold → booking → QR → door scan → re-scan shows <code>already_used</code></td></tr>
+            <tr><td>Activate + schedule + confirm</td><td>Catalog → Screenings → Bookings</td><td>Reserve → pending booking → Confirm → QR scans at the door → re-scan shows <code>already_used</code></td></tr>
             <tr><td>Restore one encrypted backup</td><td>Disposable Neon project</td><td>Restore succeeds before the first public booking</td></tr>
           </tbody>
         </table>

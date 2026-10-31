@@ -18,7 +18,23 @@ function resolveRole(claims, env) {
   if (email && allowlisted.includes(email)) return "admin";
   return claims.role === "admin" || claims.role === "staff" ? claims.role : "customer";
 }
+var demoMode = (env) => !env.CLERK_ISSUER || !env.CLERK_JWKS_URL;
+var paymentsMode = (env) => env.PAYMENTS_MODE === "razorpay" && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? "razorpay" : "manual";
+var guestSubject = (request) => {
+  const value = request.headers.get("x-customer-id")?.trim() ?? "";
+  return /^[A-Za-z0-9_-]{8,64}$/.test(value) ? value : "demo-customer";
+};
 async function authenticatedUser(request, env, admin = false) {
+  if (demoMode(env)) {
+    const role2 = request.headers.get("x-demo-admin") === "1" ? "admin" : "customer";
+    if (admin && role2 !== "admin") throw new Error("forbidden");
+    return {
+      sub: guestSubject(request),
+      iss: "demo",
+      exp: Math.floor(Date.now() / 1e3) + 3600,
+      role: role2
+    };
+  }
   const token = request.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1];
   if (!token || !env.CLERK_ISSUER || !env.CLERK_JWKS_URL) throw new Error("unauthorized");
   const [encodedHeader, encodedClaims, encodedSignature] = token.split(".");
@@ -331,9 +347,11 @@ async function route({ request, env }) {
         database: true,
         catalogTitles: row.titles,
         upcomingScreenings: row.screenings,
-        authConfigured: Boolean(env.CLERK_ISSUER && env.CLERK_JWKS_URL),
+        authConfigured: !demoMode(env),
+        authMode: demoMode(env) ? "demo" : "clerk",
         storageConfigured: Boolean(env.OBJECT_STORAGE_ENDPOINT && env.OBJECT_STORAGE_BUCKET),
-        paymentsConfigured: Boolean(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET),
+        paymentsConfigured: paymentsMode(env) === "razorpay",
+        paymentsMode: paymentsMode(env),
         checkedAt: (/* @__PURE__ */ new Date()).toISOString()
       });
     } catch (error) {
@@ -343,8 +361,10 @@ async function route({ request, env }) {
   }
   if (request.method === "GET" && path === "/api/config") {
     return json({
-      razorpayKeyId: env.RAZORPAY_KEY_ID ?? null,
-      authConfigured: Boolean(env.CLERK_ISSUER && env.CLERK_JWKS_URL)
+      razorpayKeyId: paymentsMode(env) === "razorpay" ? env.RAZORPAY_KEY_ID ?? null : null,
+      authConfigured: !demoMode(env),
+      authMode: demoMode(env) ? "demo" : "clerk",
+      paymentsMode: paymentsMode(env)
     });
   }
   if (request.method === "GET" && path === "/api/account") {
@@ -1119,6 +1139,23 @@ async function route({ request, env }) {
     if (amount > 0 && amount < 100) return json({ error: "amount_below_minimum" }, 400);
     const orderCode = makeOrderCode();
     const qrValue = `marvelsyllabus://ticket/${orderCode}`;
+    if (paymentsMode(env) === "manual") {
+      const [booking2] = await db`
+        INSERT INTO bookings (screening_id, user_id, quantity, amount_minor, discount_minor,
+          status, order_code, qr_value, payment_reference, reward_grant_id)
+        VALUES (${hold.screeningId}, ${user.sub}, ${hold.quantity}, ${amount}, ${discount},
+          'payment_pending', ${orderCode}, ${qrValue}, 'manual', ${hold.rewardGrantId})
+        RETURNING id
+      `;
+      await db`DELETE FROM booking_holds WHERE id = ${holdId}`;
+      return json({
+        manual: true,
+        bookingId: booking2.id,
+        orderCode,
+        amount,
+        currency: "INR"
+      }, 201);
+    }
     if (amount === 0) {
       const [booking2] = await db`
         INSERT INTO bookings (screening_id, user_id, quantity, amount_minor, discount_minor,
@@ -1283,13 +1320,39 @@ async function route({ request, env }) {
         ORDER BY b.created_at DESC LIMIT 200`;
     return json(rows);
   }
-  if (request.method === "POST" && path.match(/^\/api\/admin\/bookings\/[0-9a-f-]+\/(refund|cancel)$/)) {
+  if (request.method === "POST" && path.match(/^\/api\/admin\/bookings\/[0-9a-f-]+\/(refund|cancel|confirm)$/)) {
     const admin = await authenticatedUser(request, env, true);
     const segments = path.split("/").filter(Boolean);
     const bookingId = uuidParameter(segments[3]);
     const action = segments[4];
-    const [booking] = await db`SELECT id, screening_id AS "screeningId", status FROM bookings WHERE id = ${bookingId}`;
+    const [booking] = await db`
+      SELECT id, screening_id AS "screeningId", user_id AS "userId", status,
+        order_code AS "orderCode", reward_grant_id AS "rewardGrantId"
+      FROM bookings WHERE id = ${bookingId}
+    `;
     if (!booking) return json({ error: "not_found" }, 404);
+    if (action === "confirm") {
+      const [updated2] = await db`
+        UPDATE bookings SET status = 'confirmed', updated_at = now()
+        WHERE id = ${bookingId} AND status = 'payment_pending'
+        RETURNING id, status
+      `;
+      if (!updated2) return json({ error: "booking_not_pending" }, 409);
+      if (booking.rewardGrantId) {
+        await db`
+          UPDATE reward_grants SET status = 'redeemed', redeemed_at = now()
+          WHERE id = ${booking.rewardGrantId} AND status = 'available'
+        `;
+      }
+      await recordActivity(db, {
+        actor: admin.sub,
+        category: "booking",
+        summary: `Confirmed booking ${booking.orderCode} (${bookingId})`,
+        screeningId: booking.screeningId,
+        orderRef: bookingId
+      });
+      return json({ ok: true, status: updated2.status, orderCode: booking.orderCode });
+    }
     const next = action === "refund" ? "refunded" : "failed";
     const [updated] = await db`
       UPDATE bookings SET status = ${next}, ticket_status = 'invalid', updated_at = now()

@@ -64,6 +64,7 @@ export interface AcceptanceEnv {
   CLERK_ISSUER: string;
   CLERK_JWKS_URL: string;
   CLERK_AUDIENCE?: string;
+  PAYMENTS_MODE?: string;
   OWNER_EMAILS?: string;
 }
 
@@ -82,6 +83,9 @@ export function createEnv(overrides: Partial<AcceptanceEnv> = {}): AcceptanceEnv
     CLERK_ISSUER: TEST_ISSUER,
     CLERK_JWKS_URL: DEFAULT_JWKS_URL,
     CLERK_AUDIENCE: TEST_AUDIENCE,
+    // The acceptance suite pins the hosted-checkout path. Production defaults
+    // to manual confirmation (PAYMENTS_MODE unset).
+    PAYMENTS_MODE: "razorpay",
     ...overrides,
   };
 }

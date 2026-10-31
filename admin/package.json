@@ -16,7 +16,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1147.0",
     "@aws-sdk/s3-request-presigner": "^3.1147.0",
-    "@clerk/clerk-react": "^5.61.10",
     "@neondatabase/serverless": "^1.2.0",
     "@types/qrcode": "^1.5.6",
     "qrcode": "^1.5.4",

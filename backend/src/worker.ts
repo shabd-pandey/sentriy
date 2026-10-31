@@ -15,6 +15,13 @@ export interface Env {
   RAZORPAY_KEY_ID: string;
   RAZORPAY_KEY_SECRET: string;
   /**
+   * `razorpay` runs the hosted checkout and the signature check. Anything else
+   * (the default) books a seat as `payment_pending` and waits for the Command
+   * Deck to confirm it, so the ticketing seam can be exercised without a
+   * payment provider.
+   */
+  PAYMENTS_MODE?: string;
+  /**
    * Comma-separated, case-insensitive Google-email allowlist. An allowlisted
    * verified email is granted the `admin` role, bootstrapping the owner without
    * manual Clerk metadata. Additive with the Clerk `role` claim: metadata roles
@@ -76,7 +83,38 @@ function resolveRole(claims: Claims, env: Env): Role {
   return claims.role === "admin" || claims.role === "staff" ? claims.role : "customer";
 }
 
+// ---------------------------------------------------------------------------
+// Demo mode.
+//
+// A deployment without Clerk has no identity provider, so sign-in cannot work
+// and every account, wallet or booking call would answer 401. In that case the
+// worker trusts the browser-supplied guest id (`x-customer-id`) and the
+// Command Deck's `x-demo-admin: 1` marker. This exists so the ticketing flow
+// can be tested end to end before an identity provider is wired up. Set both
+// CLERK_ISSUER and CLERK_JWKS_URL and the verified-JWT path below takes over
+// again. Do not leave demo mode on a public production deployment.
+const demoMode = (env: Env) => !env.CLERK_ISSUER || !env.CLERK_JWKS_URL;
+
+const paymentsMode = (env: Env): "manual" | "razorpay" =>
+  env.PAYMENTS_MODE === "razorpay" && env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET ? "razorpay" : "manual";
+
+const guestSubject = (request: Request) => {
+  const value = request.headers.get("x-customer-id")?.trim() ?? "";
+  return /^[A-Za-z0-9_-]{8,64}$/.test(value) ? value : "demo-customer";
+};
+
 async function authenticatedUser(request: Request, env: Env, admin = false): Promise<Claims> {
+  if (demoMode(env)) {
+    const role: Role = request.headers.get("x-demo-admin") === "1" ? "admin" : "customer";
+    if (admin && role !== "admin") throw new Error("forbidden");
+    return {
+      sub: guestSubject(request),
+      iss: "demo",
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      role,
+    };
+  }
+
   const token = request.headers.get("authorization")?.match(/^Bearer (.+)$/i)?.[1];
   if (!token || !env.CLERK_ISSUER || !env.CLERK_JWKS_URL) throw new Error("unauthorized");
 
@@ -467,9 +505,11 @@ async function route({ request, env }: PagesContext): Promise<Response> {
         database: true,
         catalogTitles: row.titles,
         upcomingScreenings: row.screenings,
-        authConfigured: Boolean(env.CLERK_ISSUER && env.CLERK_JWKS_URL),
+        authConfigured: !demoMode(env),
+        authMode: demoMode(env) ? "demo" : "clerk",
         storageConfigured: Boolean(env.OBJECT_STORAGE_ENDPOINT && env.OBJECT_STORAGE_BUCKET),
-        paymentsConfigured: Boolean(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET),
+        paymentsConfigured: paymentsMode(env) === "razorpay",
+        paymentsMode: paymentsMode(env),
         checkedAt: new Date().toISOString(),
       });
     } catch (error) {
@@ -478,12 +518,14 @@ async function route({ request, env }: PagesContext): Promise<Response> {
     }
   }
 
-  // Browser-safe configuration: the Razorpay key id is public by design, the
-  // secret never leaves the server.
+  // Browser-safe configuration. The Razorpay key id (public by design) is only
+  // advertised when the hosted checkout is actually in use.
   if (request.method === "GET" && path === "/api/config") {
     return json({
-      razorpayKeyId: env.RAZORPAY_KEY_ID ?? null,
-      authConfigured: Boolean(env.CLERK_ISSUER && env.CLERK_JWKS_URL),
+      razorpayKeyId: paymentsMode(env) === "razorpay" ? (env.RAZORPAY_KEY_ID ?? null) : null,
+      authConfigured: !demoMode(env),
+      authMode: demoMode(env) ? "demo" : "clerk",
+      paymentsMode: paymentsMode(env),
     });
   }
 
@@ -1335,6 +1377,27 @@ async function route({ request, env }: PagesContext): Promise<Response> {
     const orderCode = makeOrderCode();
     const qrValue = `marvelsyllabus://ticket/${orderCode}`;
 
+    // Manual mode: no payment provider, no signature check. The seat is held by
+    // a real booking in `payment_pending`; the Command Deck confirms it, which
+    // is what flips the ticket to `confirmed` and makes it scannable.
+    if (paymentsMode(env) === "manual") {
+      const [booking] = await db`
+        INSERT INTO bookings (screening_id, user_id, quantity, amount_minor, discount_minor,
+          status, order_code, qr_value, payment_reference, reward_grant_id)
+        VALUES (${hold.screeningId}, ${user.sub}, ${hold.quantity}, ${amount}, ${discount},
+          'payment_pending', ${orderCode}, ${qrValue}, 'manual', ${hold.rewardGrantId})
+        RETURNING id
+      `;
+      await db`DELETE FROM booking_holds WHERE id = ${holdId}`;
+      return json({
+        manual: true,
+        bookingId: booking.id,
+        orderCode,
+        amount,
+        currency: "INR",
+      }, 201);
+    }
+
     // A fully discounted reward needs no payment provider. It is still a real,
     // one-time ticket in the wallet and the reward is consumed exactly once.
     if (amount === 0) {
@@ -1514,13 +1577,39 @@ async function route({ request, env }: PagesContext): Promise<Response> {
     return json(rows);
   }
 
-  if (request.method === "POST" && path.match(/^\/api\/admin\/bookings\/[0-9a-f-]+\/(refund|cancel)$/)) {
+  if (request.method === "POST" && path.match(/^\/api\/admin\/bookings\/[0-9a-f-]+\/(refund|cancel|confirm)$/)) {
     const admin = await authenticatedUser(request, env, true);
     const segments = path.split("/").filter(Boolean);
     const bookingId = uuidParameter(segments[3]);
     const action = segments[4];
-    const [booking] = await db`SELECT id, screening_id AS "screeningId", status FROM bookings WHERE id = ${bookingId}`;
+    const [booking] = await db`
+      SELECT id, screening_id AS "screeningId", user_id AS "userId", status,
+        order_code AS "orderCode", reward_grant_id AS "rewardGrantId"
+      FROM bookings WHERE id = ${bookingId}
+    `;
     if (!booking) return json({ error: "not_found" }, 404);
+
+    if (action === "confirm") {
+      const [updated] = await db`
+        UPDATE bookings SET status = 'confirmed', updated_at = now()
+        WHERE id = ${bookingId} AND status = 'payment_pending'
+        RETURNING id, status
+      `;
+      if (!updated) return json({ error: "booking_not_pending" }, 409);
+      if (booking.rewardGrantId) {
+        await db`
+          UPDATE reward_grants SET status = 'redeemed', redeemed_at = now()
+          WHERE id = ${booking.rewardGrantId} AND status = 'available'
+        `;
+      }
+      await recordActivity(db, {
+        actor: admin.sub, category: "booking",
+        summary: `Confirmed booking ${booking.orderCode} (${bookingId})`,
+        screeningId: booking.screeningId, orderRef: bookingId,
+      });
+      return json({ ok: true, status: updated.status, orderCode: booking.orderCode });
+    }
+
     const next = action === "refund" ? "refunded" : "failed";
     const [updated] = await db`
       UPDATE bookings SET status = ${next}, ticket_status = 'invalid', updated_at = now()
