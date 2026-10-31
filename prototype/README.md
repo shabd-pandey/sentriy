@@ -67,6 +67,17 @@ Vercel does **not** run `functions/api/[[path]].ts` (that is a Cloudflare Pages 
 
 The admin Command Deck deploys the same way from `admin/` (its own `scripts/build-api.mjs` generates `admin/api/[...path].js` from the same adapter), so both Vercel projects read one database and one set of rules.
 
+### Seeding the shipped posters
+
+`public/data/streak-collection/posters/` ships one portrait poster per catalog title, but the catalog API only returns `posterUrl` when the row has a `poster_key`. Upload and link them once with:
+
+```sh
+npm run upload:posters -- --dry-run   # list what would change
+npm run upload:posters                # upload artwork/<title-id>.jpg and set poster_key
+```
+
+The script reads `DATABASE_URL` and `OBJECT_STORAGE_*` from `.dev.vars`, `.env.local` or the environment, skips rows that already match, and is safe to re-run after adding titles. Without it every card falls back to a letter tile.
+
 ## Checkout
 
 Booking is hold → Razorpay order → server-side signature check → wallet:

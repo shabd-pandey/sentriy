@@ -7,6 +7,7 @@
     "dev": "vite --host",
     "build": "npm run build:api && tsc -b && npm run check:worker && vite build",
     "build:api": "node scripts/build-api.mjs",
+    "upload:posters": "node scripts/upload-posters.mjs",
     "preview": "vite preview",
     "test": "vitest run",
     "dev:issuer": "node scripts/dev-issuer.mjs",
