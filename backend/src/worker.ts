@@ -2,7 +2,7 @@ import { neon } from "@neondatabase/serverless";
 import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
-interface Env {
+export interface Env {
   DATABASE_URL: string;
   OBJECT_STORAGE_ENDPOINT: string;
   OBJECT_STORAGE_REGION: string;
@@ -12,12 +12,20 @@ interface Env {
   CLERK_ISSUER: string;
   CLERK_JWKS_URL: string;
   CLERK_AUDIENCE?: string;
+  RAZORPAY_KEY_ID: string;
+  RAZORPAY_KEY_SECRET: string;
   /**
    * Comma-separated, case-insensitive Google-email allowlist. An allowlisted
    * verified email is granted the `admin` role, bootstrapping the owner without
    * manual Clerk metadata. Additive with the Clerk `role` claim: metadata roles
    * keep working, including when this is unset.
    */
+  /**
+   * Comma-separated origins allowed to call this API from another domain
+   * (for example a Vercel frontend with the backend on a Worker). Same-origin
+   * deployments do not need it.
+   */
+  CORS_ORIGINS?: string;
   OWNER_EMAILS?: string;
 }
 
@@ -29,11 +37,12 @@ interface Claims {
   aud?: string | string[];
   role?: string;
   email?: string;
+  name?: string;
 }
 
 type ClerkJwk = JsonWebKey & { kid?: string; kty?: string };
 
-interface PagesContext {
+export interface PagesContext {
   request: Request;
   env: Env;
   params: Record<string, string>;
@@ -139,6 +148,27 @@ const requiredText = (value: unknown, name: string, max = 500) => {
   if (typeof value !== "string" || !value.trim() || value.length > max) throw new Error(`invalid_${name}`);
   return value.trim();
 };
+
+const hex = (bytes: ArrayBuffer) =>
+  Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+
+const constantTimeEqual = (left: string, right: string) => {
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  return difference === 0;
+};
+
+async function razorpaySignature(orderId: string, paymentId: string, secret: string) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return hex(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`${orderId}|${paymentId}`)));
+}
 const objectStorage = (env: Env) => new S3Client({
   endpoint: env.OBJECT_STORAGE_ENDPOINT,
   region: env.OBJECT_STORAGE_REGION,
@@ -190,10 +220,403 @@ const profileQrDestination = (value: unknown) => {
   return parsed.toString();
 };
 
+// ---- Customer account, rewards and notifications -------------------------
+// The customer app renders one snapshot. These helpers build the parts that
+// belong to the signed-in account (not the public catalog) from the same
+// reward_campaigns / reward_grants tables the Command Deck administers, so the
+// prototype and production never disagree about a reward again.
+
+type CustomerReward = {
+  id: string;
+  kind: "coupon" | "discount" | "free-ticket";
+  title: string;
+  description: string;
+  status: "reserved" | "available" | "redeemed";
+  expiresAt: string;
+  instructions: string;
+  code?: string;
+  discountPercent?: 30 | 50;
+};
+
+const customerDisplayName = (claims: Claims) => {
+  const name = typeof claims.name === "string" ? claims.name.trim() : "";
+  if (name) return name.slice(0, 80);
+  const email = typeof claims.email === "string" ? claims.email.split("@")[0]?.trim() : "";
+  return (email || "Member").slice(0, 80);
+};
+
+const rewardTitle = (campaign: { rewardKind: string; discountPercent: number | null }) =>
+  campaign.rewardKind === "discount"
+    ? `${campaign.discountPercent}% off one ticket`
+    : campaign.rewardKind === "free-ticket"
+      ? "A free ticket"
+      : "Partner reward";
+
+const mapGrant = (row: any): CustomerReward => ({
+  id: row.id,
+  kind: row.kind,
+  title: row.title,
+  description: row.detail || "A reward earned through the MarvelSyllabus campaign.",
+  status: row.status === "redeemed" ? "redeemed" : "available",
+  expiresAt: row.expiresAt ?? new Date(Date.now() + 30 * 86_400_000).toISOString(),
+  instructions: row.instructions || "Apply this reward at checkout.",
+  ...(row.code ? { code: row.code } : {}),
+  ...(row.discountPercent ? { discountPercent: row.discountPercent } : {}),
+});
+
+async function loadCustomerGrants(db: Db, userId: string) {
+  const rows = await db`
+    SELECT g.id, g.enrollment_id AS "enrollmentId", g.kind, g.title, g.detail, g.status,
+      g.expires_at AS "expiresAt", k.code, c.discount_percent AS "discountPercent",
+      c.instructions
+    FROM reward_grants g
+    LEFT JOIN reward_campaign_codes k ON k.id = g.code_id
+    LEFT JOIN reward_campaigns c ON c.id = g.campaign_id
+    WHERE g.user_id = ${userId} AND g.status IN ('available', 'redeemed')
+    ORDER BY g.created_at DESC
+  `;
+  return rows;
+}
+
+async function loadRewardsState(db: Db, userId: string) {
+  const [eligibility] = await db`
+    SELECT EXISTS(
+      SELECT 1 FROM bookings WHERE user_id = ${userId} AND status = 'confirmed'
+    ) AS eligible
+  `;
+  const eligible = Boolean(eligibility?.eligible);
+
+  await db`
+    UPDATE reward_grants SET status = 'expired'
+    WHERE user_id = ${userId} AND status = 'available'
+      AND expires_at IS NOT NULL AND expires_at <= now()
+  `;
+  const grantRows = await loadCustomerGrants(db, userId);
+
+  const [campaign] = await db`
+    SELECT id, name, reward_kind AS "rewardKind", discount_percent AS "discountPercent",
+      required_plays AS "requiredPlays", completion_window_days AS "completionWindowDays",
+      reward_expiry_days AS "rewardExpiryDays", reward_cap AS "rewardCap", instructions
+    FROM reward_campaigns WHERE status = 'active'
+    ORDER BY created_at DESC LIMIT 1
+  `;
+
+  if (!campaign) {
+    return {
+      campaign: {
+        id: "",
+        name: "Temporal Loom",
+        completedPlays: 0,
+        requiredPlays: 3,
+        completionWindowDays: 7,
+        expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+        status: "paused",
+        eligible: false,
+        claimed: false,
+        reward: {
+          id: "reward-no-campaign",
+          kind: "discount",
+          title: "No reward campaign is running",
+          description: "Rewards open when the operator starts the next campaign.",
+          status: "reserved",
+          expiresAt: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+          instructions: "",
+        } satisfies CustomerReward,
+      },
+      grants: grantRows.map(mapGrant),
+    };
+  }
+
+  let [enrollment] = await db`
+    SELECT id, completed_plays AS "completedPlays", status,
+      reservation_expires_at AS "reservationExpiresAt", created_at AS "createdAt"
+    FROM campaign_enrollments
+    WHERE campaign_id = ${campaign.id} AND user_id = ${userId}
+  `;
+
+  if (eligible) {
+    if (!enrollment) {
+      await db`
+        INSERT INTO campaign_enrollments (campaign_id, user_id)
+        VALUES (${campaign.id}, ${userId})
+        ON CONFLICT (campaign_id, user_id) DO NOTHING
+      `;
+      [enrollment] = await db`
+        SELECT id, completed_plays AS "completedPlays", status,
+          reservation_expires_at AS "reservationExpiresAt", created_at AS "createdAt"
+        FROM campaign_enrollments
+        WHERE campaign_id = ${campaign.id} AND user_id = ${userId}
+      `;
+    }
+    // A campaign window that lapsed restarts the quest rather than stranding
+    // the account on a dead enrollment.
+    if (enrollment && enrollment.status === "expired") {
+      [enrollment] = await db`
+        UPDATE campaign_enrollments
+        SET status = 'enrolled', completed_plays = 0, created_at = now(),
+          round_started_at = NULL, active_round_expires_at = NULL
+        WHERE id = ${enrollment.id}
+        RETURNING id, completed_plays AS "completedPlays", status,
+          reservation_expires_at AS "reservationExpiresAt", created_at AS "createdAt"
+      `;
+    }
+  }
+
+  const windowMs = Number(campaign.completionWindowDays) * 86_400_000;
+  const completedPlays = Number(enrollment?.completedPlays ?? 0);
+  const requiredPlays = Number(campaign.requiredPlays);
+  const grant = enrollment
+    ? grantRows.find((row) => row.enrollmentId === enrollment.id)
+    : undefined;
+  const reward: CustomerReward = grant
+    ? mapGrant(grant)
+    : {
+        id: `campaign-${campaign.id}`,
+        kind: campaign.rewardKind,
+        title: rewardTitle(campaign as { rewardKind: string; discountPercent: number | null }),
+        description: campaign.instructions || "Complete the campaign rounds to unlock this reward.",
+        status: completedPlays >= requiredPlays ? "available" : "reserved",
+        expiresAt: enrollment?.reservationExpiresAt ?? new Date(Date.now() + windowMs).toISOString(),
+        instructions: campaign.instructions || "Apply this reward at checkout.",
+        ...(campaign.discountPercent ? { discountPercent: campaign.discountPercent } : {}),
+      };
+
+  return {
+    campaign: {
+      id: campaign.id,
+      name: campaign.name,
+      completedPlays,
+      requiredPlays,
+      completionWindowDays: Number(campaign.completionWindowDays),
+      expiresAt: enrollment?.reservationExpiresAt ?? new Date(Date.now() + windowMs).toISOString(),
+      status: enrollment && ["granted", "claimed"].includes(enrollment.status)
+        ? "complete"
+        : "active",
+      eligible,
+      claimed: enrollment?.status === "claimed",
+      reward,
+    },
+    grants: grantRows.map(mapGrant),
+  };
+}
+
+async function grantCampaignReward(db: Db, userId: string, enrollmentId: string, campaign: any) {
+  const [existing] = await db`SELECT id FROM reward_grants WHERE enrollment_id = ${enrollmentId} LIMIT 1`;
+  if (existing) {
+    await db`
+      UPDATE campaign_enrollments
+      SET status = 'granted', reservation_expires_at = COALESCE(reservation_expires_at, now() + ${Number(campaign.rewardExpiryDays)} * interval '1 day')
+      WHERE id = ${enrollmentId}
+    `;
+    return;
+  }
+  const [{ granted = 0 }] = await db`
+    SELECT count(*)::integer AS granted FROM reward_grants WHERE campaign_id = ${campaign.id}
+  `;
+  if (Number(granted) >= Number(campaign.rewardCap)) return;
+
+  let codeId: string | null = null;
+  if (campaign.rewardKind === "coupon") {
+    const [code] = await db`
+      SELECT id FROM reward_campaign_codes
+      WHERE campaign_id = ${campaign.id} AND status = 'available'
+      ORDER BY created_at LIMIT 1
+      FOR UPDATE
+    `;
+    if (code) {
+      codeId = code.id;
+      await db`
+        UPDATE reward_campaign_codes SET status = 'reserved', granted_to = ${userId}
+        WHERE id = ${code.id}
+      `;
+    }
+  }
+
+  const [grant] = await db`
+    INSERT INTO reward_grants (campaign_id, enrollment_id, user_id, kind, title, detail, status, expires_at, code_id)
+    VALUES (${campaign.id}, ${enrollmentId}, ${userId}, ${campaign.rewardKind},
+      ${rewardTitle(campaign)}, ${campaign.instructions || ""}, 'available',
+      now() + ${Number(campaign.rewardExpiryDays)} * interval '1 day', ${codeId})
+    RETURNING id
+  `;
+  await db`
+    UPDATE campaign_enrollments
+    SET status = 'granted', reservation_expires_at = now() + ${Number(campaign.rewardExpiryDays)} * interval '1 day',
+      code_id = ${codeId}
+    WHERE id = ${enrollmentId}
+  `;
+  return grant?.id;
+}
+
 async function route({ request, env }: PagesContext): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname.replace(/\/+$/, "");
   const db = neon(env.DATABASE_URL);
+
+  // Public deployment diagnostics. The customer app can prove the API and the
+  // database are reachable without exposing a single secret.
+  if (request.method === "GET" && path === "/api/health") {
+    try {
+      const [row] = await db`
+        SELECT
+          (SELECT count(*)::integer FROM catalog_titles) AS titles,
+          (SELECT count(*)::integer FROM screenings WHERE starts_at > now()) AS screenings
+      `;
+      return json({
+        ok: true,
+        database: true,
+        catalogTitles: row.titles,
+        upcomingScreenings: row.screenings,
+        authConfigured: Boolean(env.CLERK_ISSUER && env.CLERK_JWKS_URL),
+        storageConfigured: Boolean(env.OBJECT_STORAGE_ENDPOINT && env.OBJECT_STORAGE_BUCKET),
+        paymentsConfigured: Boolean(env.RAZORPAY_KEY_ID && env.RAZORPAY_KEY_SECRET),
+        checkedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Health check failed", error);
+      return json({ ok: false, database: false, error: "database_unreachable" }, 503);
+    }
+  }
+
+  // Browser-safe configuration: the Razorpay key id is public by design, the
+  // secret never leaves the server.
+  if (request.method === "GET" && path === "/api/config") {
+    return json({
+      razorpayKeyId: env.RAZORPAY_KEY_ID ?? null,
+      authConfigured: Boolean(env.CLERK_ISSUER && env.CLERK_JWKS_URL),
+    });
+  }
+
+  if (request.method === "GET" && path === "/api/account") {
+    const user = await authenticatedUser(request, env);
+    const [profile] = await db`
+      SELECT display_name AS "displayName", share_watched AS "shareWatched",
+        share_streak AS "shareStreak", product_updates AS "productUpdates",
+        reminder_notifications AS "reminderNotifications"
+      FROM customer_profiles WHERE user_id = ${user.sub}
+    `;
+    const [setting] = await db`
+      SELECT setting_value AS "qrDestination" FROM site_settings WHERE setting_key = 'profile_qr_destination'
+    `;
+    return json({
+      displayName: profile?.displayName ?? customerDisplayName(user),
+      shareWatched: profile?.shareWatched ?? false,
+      shareStreak: profile?.shareStreak ?? false,
+      productUpdates: profile?.productUpdates ?? false,
+      reminderNotifications: profile?.reminderNotifications ?? false,
+      qrDestination: setting?.qrDestination ?? null,
+    });
+  }
+
+  if (request.method === "PUT" && path === "/api/account") {
+    const user = await authenticatedUser(request, env);
+    const body = await parseBody<{
+      displayName?: string; shareWatched?: boolean; shareStreak?: boolean;
+      productUpdates?: boolean; reminderNotifications?: boolean;
+    }>(request);
+    const optionalBoolean = (value: unknown) => value === undefined
+      ? null
+      : typeof value === "boolean"
+        ? value
+        : (() => { throw new Error("invalid_account_setting"); })();
+    const displayName = body.displayName === undefined ? null : requiredText(body.displayName, "display_name", 80);
+    const shareWatched = optionalBoolean(body.shareWatched);
+    const shareStreak = optionalBoolean(body.shareStreak);
+    const productUpdates = optionalBoolean(body.productUpdates);
+    const reminderNotifications = optionalBoolean(body.reminderNotifications);
+    await db`
+      INSERT INTO customer_profiles (user_id, display_name, share_watched, share_streak,
+        product_updates, reminder_notifications)
+      VALUES (${user.sub}, ${displayName ?? customerDisplayName(user)},
+        ${shareWatched ?? false}, ${shareStreak ?? false},
+        ${productUpdates ?? false}, ${reminderNotifications ?? false})
+      ON CONFLICT (user_id) DO UPDATE SET
+        display_name = COALESCE(${displayName}, customer_profiles.display_name),
+        share_watched = COALESCE(${shareWatched}, customer_profiles.share_watched),
+        share_streak = COALESCE(${shareStreak}, customer_profiles.share_streak),
+        product_updates = COALESCE(${productUpdates}, customer_profiles.product_updates),
+        reminder_notifications = COALESCE(${reminderNotifications}, customer_profiles.reminder_notifications),
+        updated_at = now()
+    `;
+    const [profile] = await db`
+      SELECT display_name AS "displayName", share_watched AS "shareWatched",
+        share_streak AS "shareStreak", product_updates AS "productUpdates",
+        reminder_notifications AS "reminderNotifications"
+      FROM customer_profiles WHERE user_id = ${user.sub}
+    `;
+    const [setting] = await db`
+      SELECT setting_value AS "qrDestination" FROM site_settings WHERE setting_key = 'profile_qr_destination'
+    `;
+    return json({ ...profile, qrDestination: setting?.qrDestination ?? null });
+  }
+
+  if (request.method === "GET" && path === "/api/rewards") {
+    const user = await authenticatedUser(request, env);
+    return json(await loadRewardsState(db, user.sub));
+  }
+
+  if (request.method === "POST" && path === "/api/rewards/rounds/start") {
+    const user = await authenticatedUser(request, env);
+    const state = await loadRewardsState(db, user.sub);
+    if (!state.campaign.id) return json({ error: "no_reward_campaign" }, 404);
+    if (!state.campaign.eligible) return json({ error: "rewards_locked" }, 403);
+    if (state.campaign.completedPlays >= state.campaign.requiredPlays) return json({ error: "campaign_complete" }, 409);
+    const [enrollment] = await db`
+      SELECT id FROM campaign_enrollments
+      WHERE campaign_id = ${state.campaign.id} AND user_id = ${user.sub} AND status = 'enrolled'
+    `;
+    if (!enrollment) return json({ error: "campaign_not_enrolled" }, 409);
+    await db`
+      UPDATE campaign_enrollments
+      SET round_started_at = now(), active_round_expires_at = now() + interval '5 minutes'
+      WHERE id = ${enrollment.id}
+    `;
+    return json({ startedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 5 * 60_000).toISOString() }, 201);
+  }
+
+  if (request.method === "POST" && path === "/api/rewards/rounds/complete") {
+    const user = await authenticatedUser(request, env);
+    const state = await loadRewardsState(db, user.sub);
+    if (!state.campaign.id) return json({ error: "no_reward_campaign" }, 404);
+    const [enrollment] = await db`
+      SELECT e.id, e.completed_plays AS "completedPlays", c.id AS "campaignId",
+        c.reward_kind AS "rewardKind", c.discount_percent AS "discountPercent",
+        c.required_plays AS "requiredPlays", c.reward_expiry_days AS "rewardExpiryDays",
+        c.reward_cap AS "rewardCap", c.instructions
+      FROM campaign_enrollments e
+      JOIN reward_campaigns c ON c.id = e.campaign_id
+      WHERE e.campaign_id = ${state.campaign.id} AND e.user_id = ${user.sub}
+        AND e.status = 'enrolled'
+        AND e.round_started_at IS NOT NULL
+        AND e.active_round_expires_at > now()
+        AND e.round_started_at <= now() - interval '8 seconds'
+      FOR UPDATE OF e
+    `;
+    if (!enrollment) return json({ error: "round_not_ready" }, 409);
+    const completedPlays = Number(enrollment.completedPlays) + 1;
+    await db`
+      UPDATE campaign_enrollments
+      SET completed_plays = ${completedPlays}, round_started_at = NULL,
+        active_round_expires_at = NULL
+      WHERE id = ${enrollment.id}
+    `;
+    if (completedPlays >= Number(enrollment.requiredPlays)) {
+      await grantCampaignReward(db, user.sub, enrollment.id, { ...enrollment, id: enrollment.campaignId });
+    }
+    return json(await loadRewardsState(db, user.sub));
+  }
+
+  if (request.method === "POST" && path === "/api/rewards/claim") {
+    const user = await authenticatedUser(request, env);
+    const [grant] = await db`
+      SELECT id, enrollment_id AS "enrollmentId" FROM reward_grants
+      WHERE user_id = ${user.sub} AND status = 'available'
+      ORDER BY created_at DESC LIMIT 1
+    `;
+    if (!grant) return json({ error: "no_reward_to_claim" }, 404);
+    await db`UPDATE campaign_enrollments SET status = 'claimed' WHERE id = ${grant.enrollmentId}`;
+    return json(await loadRewardsState(db, user.sub));
+  }
 
   if (request.method === "GET" && path === "/api/profile-qr") {
     const [setting] = await db`SELECT setting_value AS "qrDestination" FROM site_settings WHERE setting_key = 'profile_qr_destination'`;
@@ -808,7 +1231,8 @@ async function route({ request, env }: PagesContext): Promise<Response> {
     const rows = await db`
       SELECT b.id, b.order_code AS "orderCode", b.screening_id AS "screeningId",
         s.title_id AS "titleId", t.title, s.starts_at AS "startsAt", s.ends_at AS "endsAt",
-        s.location, b.quantity, b.amount_minor AS "amountMinor", b.status,
+        s.location, b.quantity, b.amount_minor AS "amountMinor", b.discount_minor AS "discountMinor",
+        b.status,
         b.ticket_status AS "ticketStatus", b.qr_value AS "qrValue",
         b.created_at AS "createdAt"
       FROM bookings b
@@ -823,10 +1247,22 @@ async function route({ request, env }: PagesContext): Promise<Response> {
 
   if (request.method === "POST" && path === "/api/booking-holds") {
     const user = await authenticatedUser(request, env);
-    const body = await parseBody<{ screeningId: string; quantity?: number }>(request);
+    const body = await parseBody<{ screeningId: string; quantity?: number; rewardId?: string }>(request);
     const screeningId = uuidParameter(requiredText(body.screeningId, "screening_id", 64));
     const quantity = body.quantity == null ? 1 : positiveInteger(body.quantity, "quantity");
     if (quantity > 10) throw new Error("invalid_quantity");
+    let rewardId: string | null = null;
+    if (body.rewardId) {
+      rewardId = uuidParameter(requiredText(body.rewardId, "reward_id", 64));
+      const [reward] = await db`
+        SELECT g.id, c.reward_kind AS "rewardKind"
+        FROM reward_grants g JOIN reward_campaigns c ON c.id = g.campaign_id
+        WHERE g.id = ${rewardId} AND g.user_id = ${user.sub} AND g.status = 'available'
+          AND (g.expires_at IS NULL OR g.expires_at > now())
+      `;
+      if (!reward) return json({ error: "reward_unavailable" }, 409);
+      if (reward.rewardKind === "coupon") return json({ error: "reward_not_applicable" }, 409);
+    }
     const [screening] = await db`
       SELECT s.id, s.capacity, t.active AS title_active, s.cancelled,
         s.starts_at, s.sales_open_at, s.sales_close_at,
@@ -848,11 +1284,138 @@ async function route({ request, env }: PagesContext): Promise<Response> {
       return json({ error: "sold_out" }, 409);
     }
     const [hold] = await db`
-      INSERT INTO booking_holds (screening_id, user_id, quantity, expires_at)
-      VALUES (${screeningId}, ${user.sub}, ${quantity}, now() + interval '10 minutes')
+      INSERT INTO booking_holds (screening_id, user_id, quantity, expires_at, reward_grant_id)
+      VALUES (${screeningId}, ${user.sub}, ${quantity}, now() + interval '10 minutes', ${rewardId})
       RETURNING id, expires_at AS "expiresAt"
     `;
     return json({ holdId: hold.id, expiresAt: hold.expiresAt }, 201);
+  }
+
+  if (request.method === "POST" && path === "/api/create-order") {
+    const user = await authenticatedUser(request, env);
+    const body = await parseBody<{ holdId: string }>(request);
+    const holdId = uuidParameter(requiredText(body.holdId, "hold_id", 64));
+    const [hold] = await db`
+      SELECT h.id, h.screening_id AS "screeningId", h.quantity, h.reward_grant_id AS "rewardGrantId",
+        s.price_minor AS "priceMinor"
+      FROM booking_holds h
+      JOIN screenings s ON s.id = h.screening_id
+      JOIN catalog_titles t ON t.id = s.title_id
+      WHERE h.id = ${holdId} AND h.user_id = ${user.sub} AND h.expires_at > now()
+        AND t.active AND NOT s.cancelled AND s.starts_at > now()
+      FOR UPDATE OF h
+    `;
+    if (!hold) return json({ error: "hold_expired_or_not_found" }, 409);
+
+    // Rewards are priced from server data, never from the browser's displayed
+    // total. A percentage reward discounts one ticket per order; a free-ticket
+    // reward covers one ticket.
+    let discount = 0;
+    if (hold.rewardGrantId) {
+      const [reward] = await db`
+        SELECT g.id, c.reward_kind AS "rewardKind", c.discount_percent AS "discountPercent"
+        FROM reward_grants g JOIN reward_campaigns c ON c.id = g.campaign_id
+        WHERE g.id = ${hold.rewardGrantId} AND g.user_id = ${user.sub}
+          AND g.status = 'available' AND (g.expires_at IS NULL OR g.expires_at > now())
+        FOR UPDATE OF g
+      `;
+      if (!reward) return json({ error: "reward_unavailable" }, 409);
+      if (reward.rewardKind === "discount") {
+        discount = Math.round(Number(hold.priceMinor) * Number(reward.discountPercent) / 100);
+      } else if (reward.rewardKind === "free-ticket") {
+        discount = Number(hold.priceMinor);
+      }
+    }
+
+    const gross = Number(hold.priceMinor) * Number(hold.quantity);
+    const amount = Math.max(0, gross - discount);
+    if (!Number.isSafeInteger(amount) || amount < 0) return json({ error: "invalid_amount" }, 400);
+    if (amount > 0 && amount < 100) return json({ error: "amount_below_minimum" }, 400);
+
+    const orderCode = makeOrderCode();
+    const qrValue = `marvelsyllabus://ticket/${orderCode}`;
+
+    // A fully discounted reward needs no payment provider. It is still a real,
+    // one-time ticket in the wallet and the reward is consumed exactly once.
+    if (amount === 0) {
+      const [booking] = await db`
+        INSERT INTO bookings (screening_id, user_id, quantity, amount_minor, discount_minor,
+          status, order_code, qr_value, payment_reference, reward_grant_id)
+        VALUES (${hold.screeningId}, ${user.sub}, ${hold.quantity}, 0, ${discount},
+          'confirmed', ${orderCode}, ${qrValue}, 'reward', ${hold.rewardGrantId})
+        RETURNING id
+      `;
+      await db`
+        UPDATE reward_grants SET status = 'redeemed', redeemed_at = now()
+        WHERE id = ${hold.rewardGrantId}
+      `;
+      await db`DELETE FROM booking_holds WHERE id = ${holdId}`;
+      return json({ free: true, orderCode, amount: 0, currency: "INR" }, 201);
+    }
+
+    if (!env.RAZORPAY_KEY_ID || !env.RAZORPAY_KEY_SECRET) throw new Error("invalid_razorpay_configuration");
+
+    const [booking] = await db`
+      INSERT INTO bookings (screening_id, user_id, quantity, amount_minor, discount_minor,
+        status, order_code, qr_value, reward_grant_id)
+      VALUES (${hold.screeningId}, ${user.sub}, ${hold.quantity}, ${amount}, ${discount},
+        'payment_pending', ${orderCode}, ${qrValue}, ${hold.rewardGrantId})
+      RETURNING id
+    `;
+
+    let razorpayOrder: { id?: unknown; amount?: unknown; currency?: unknown };
+    try {
+      const response = await fetch("https://api.razorpay.com/v1/orders", {
+        method: "POST",
+        headers: {
+          authorization: `Basic ${btoa(`${env.RAZORPAY_KEY_ID}:${env.RAZORPAY_KEY_SECRET}`)}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ amount, currency: "INR", receipt: booking.id }),
+      });
+      if (response.status === 401) throw new Error("razorpay_auth_failed");
+      if (!response.ok) throw new Error("razorpay_create_failed");
+      razorpayOrder = await response.json() as { id?: unknown; amount?: unknown; currency?: unknown };
+    } catch (error) {
+      await db`DELETE FROM bookings WHERE id = ${booking.id} AND status = 'payment_pending'`;
+      throw error;
+    }
+
+    if (typeof razorpayOrder.id !== "string" || typeof razorpayOrder.amount !== "number" || typeof razorpayOrder.currency !== "string") {
+      await db`DELETE FROM bookings WHERE id = ${booking.id} AND status = 'payment_pending'`;
+      throw new Error("razorpay_create_failed");
+    }
+    await db`UPDATE bookings SET payment_reference = ${razorpayOrder.id}, updated_at = now() WHERE id = ${booking.id}`;
+    return json({ order_id: razorpayOrder.id, amount: razorpayOrder.amount, currency: razorpayOrder.currency }, 201);
+  }
+
+  if (request.method === "POST" && path === "/api/verify-payment") {
+    const user = await authenticatedUser(request, env);
+    const body = await parseBody<{ razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }>(request);
+    const orderId = requiredText(body.razorpay_order_id, "razorpay_order_id", 128);
+    const paymentId = requiredText(body.razorpay_payment_id, "razorpay_payment_id", 128);
+    const signature = requiredText(body.razorpay_signature, "razorpay_signature", 128);
+    if (!env.RAZORPAY_KEY_SECRET) throw new Error("invalid_razorpay_configuration");
+    const expected = await razorpaySignature(orderId, paymentId, env.RAZORPAY_KEY_SECRET);
+    if (!constantTimeEqual(expected, signature)) return json({ error: "signature_mismatch" }, 400);
+
+    const [booking] = await db`
+      UPDATE bookings SET status = 'confirmed', updated_at = now()
+      WHERE user_id = ${user.sub} AND payment_reference = ${orderId} AND status = 'payment_pending'
+      RETURNING id, order_code AS "orderCode", reward_grant_id AS "rewardGrantId"
+    `;
+    if (!booking) return json({ error: "payment_not_pending" }, 409);
+    if (booking.rewardGrantId) {
+      await db`
+        UPDATE reward_grants SET status = 'redeemed', redeemed_at = now()
+        WHERE id = ${booking.rewardGrantId} AND status = 'available'
+      `;
+    }
+    await db`DELETE FROM booking_holds WHERE id IN (
+      SELECT h.id FROM booking_holds h JOIN bookings b ON b.screening_id = h.screening_id
+      WHERE b.id = ${booking.id} AND h.user_id = ${user.sub}
+    )`;
+    return json({ success: true, orderCode: booking.orderCode });
   }
 
   if (request.method === "GET" && path === "/api/staff/screenings") {
@@ -1032,14 +1595,41 @@ async function route({ request, env }: PagesContext): Promise<Response> {
 }
 
 export const onRequest = async (context: PagesContext) => {
+  const origin = context.request.headers.get("origin");
+  const allowedOrigins = (context.env.CORS_ORIGINS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const allowOrigin = origin && (allowedOrigins.includes("*") || allowedOrigins.includes(origin));
+  const cors: Record<string, string> = allowOrigin
+    ? {
+        "access-control-allow-origin": origin,
+        "access-control-allow-methods": "GET,POST,PUT,DELETE,OPTIONS",
+        "access-control-allow-headers": "authorization,content-type",
+        "access-control-max-age": "86400",
+        vary: "Origin",
+      }
+    : {};
+  if (context.request.method === "OPTIONS" && allowOrigin) {
+    return new Response(null, { status: 204, headers: cors });
+  }
+
+  let response: Response;
   try {
-    return await route(context);
+    response = await route(context);
   } catch (error) {
     const message = error instanceof Error ? error.message : "internal_error";
-    if (message === "unauthorized") return json({ error: message }, 401);
-    if (message === "forbidden") return json({ error: message }, 403);
-    if (message === "auth_unavailable") return json({ error: message }, 503);
-    console.error("API request failed", error);
-    return json({ error: message.startsWith("invalid_") ? message : "request_failed" }, message.startsWith("invalid_") ? 400 : 500);
+    if (message === "unauthorized") response = json({ error: message }, 401);
+    else if (message === "forbidden") response = json({ error: message }, 403);
+    else if (message === "auth_unavailable") response = json({ error: message }, 503);
+    else if (message === "razorpay_auth_failed") response = json({ error: message }, 401);
+    else {
+      console.error("API request failed", error);
+      response = json({ error: message.startsWith("invalid_") ? message : "request_failed" }, message.startsWith("invalid_") ? 400 : 500);
+    }
   }
+  if (!allowOrigin) return response;
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(cors)) headers.set(name, value);
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 };

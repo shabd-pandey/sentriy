@@ -59,6 +59,8 @@ export interface AcceptanceEnv {
   OBJECT_STORAGE_BUCKET: string;
   OBJECT_STORAGE_ACCESS_KEY_ID: string;
   OBJECT_STORAGE_SECRET_ACCESS_KEY: string;
+  RAZORPAY_KEY_ID: string;
+  RAZORPAY_KEY_SECRET: string;
   CLERK_ISSUER: string;
   CLERK_JWKS_URL: string;
   CLERK_AUDIENCE?: string;
@@ -75,6 +77,8 @@ export function createEnv(overrides: Partial<AcceptanceEnv> = {}): AcceptanceEnv
     OBJECT_STORAGE_BUCKET: "acceptance-media",
     OBJECT_STORAGE_ACCESS_KEY_ID: "acceptance-access-key",
     OBJECT_STORAGE_SECRET_ACCESS_KEY: "acceptance-secret-key",
+    RAZORPAY_KEY_ID: "rzp_test_acceptance",
+    RAZORPAY_KEY_SECRET: "acceptance_secret",
     CLERK_ISSUER: TEST_ISSUER,
     CLERK_JWKS_URL: DEFAULT_JWKS_URL,
     CLERK_AUDIENCE: TEST_AUDIENCE,

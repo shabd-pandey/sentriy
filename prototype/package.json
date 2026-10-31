@@ -4,11 +4,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "tsc -b && npm run check:worker && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "check:worker": "tsc --noEmit --target ES2022 --lib ES2022,DOM,DOM.Iterable --module ESNext --moduleResolution Bundler --skipLibCheck \"functions/api/[[path]].ts\"",
+    "dev:issuer": "node scripts/dev-issuer.mjs",
+    "check:worker": "tsc --noEmit --target ES2022 --lib ES2022,DOM,DOM.Iterable --module ESNext --moduleResolution Bundler --skipLibCheck \"functions/api/[[path]].ts\" \"api/[...path].ts\"",
     "dev:pages": "wrangler pages dev dist",
     "deploy:pages": "wrangler pages deploy dist"
   },
@@ -19,6 +20,7 @@
     "@neondatabase/serverless": "^1.2.0",
     "@types/qrcode": "^1.5.6",
     "qrcode": "^1.5.4",
+    "razorpay": "^2.9.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

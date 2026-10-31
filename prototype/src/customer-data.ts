@@ -1,17 +1,24 @@
 import {
   apiRequest,
+  loadAccount,
+  loadBanners,
   loadCatalog,
   loadProfileQr,
   loadProgress,
+  loadRewards,
   loadScreenings,
+  loadWallet,
+  saveAccount,
   type CatalogTitle,
+  type RewardCampaign,
+  type RewardGrant,
   type Screening,
   type TitleType,
+  type WalletBooking,
   type WatchedItem,
 } from "./catalog-api";
 
-export type RewardKind = "coupon" | "discount" | "free-ticket";
-export type RewardStatus = "reserved" | "available" | "redeemed";
+export type { RewardCampaign, RewardGrant, RewardKind, RewardStatus } from "./catalog-api";
 
 export interface Banner {
   id: string;
@@ -34,37 +41,12 @@ export interface TicketBooking {
   location: string;
   quantity: number;
   amountMinor: number;
+  discountMinor?: number;
   status: "confirmed" | "payment_pending" | "refunded" | "cancelled";
   ticketStatus: "valid" | "used" | "invalid";
   qrValue: string;
   createdAt: string;
   refundStatus?: "pending" | "confirmed" | "failed";
-}
-
-export interface RewardGrant {
-  id: string;
-  kind: RewardKind;
-  title: string;
-  description: string;
-  status: RewardStatus;
-  expiresAt: string;
-  instructions: string;
-  code?: string;
-  discountPercent?: 30 | 50;
-  eligibleTitleIds?: string[];
-}
-
-export interface RewardCampaign {
-  id: string;
-  name: string;
-  completedPlays: number;
-  requiredPlays: number;
-  completionWindowDays: number;
-  expiresAt: string;
-  status: "active" | "paused" | "complete";
-  eligible: boolean;
-  claimed: boolean;
-  reward: RewardGrant;
 }
 
 export interface CustomerNotification {
@@ -95,10 +77,14 @@ export interface CustomerSnapshot {
   campaign: RewardCampaign;
   notifications: CustomerNotification[];
   settings: CustomerSettings;
-  source: "api" | "demo";
+  /**
+   * `api` is the only source of truth for a real account. `demo` is the
+   * development fallback used when the local worker is not running, and
+   * `unavailable` is a production API failure - never invented data.
+   */
+  source: "api" | "demo" | "unavailable";
+  issues?: string[];
 }
-
-export const CUSTOMER_STATE_KEY = "marvelsyllabus-customer-state-v3";
 
 function futureDate(days: number, hour = 19, minute = 30) {
   const date = new Date(Date.now() + days * 86_400_000);
@@ -111,6 +97,16 @@ function pastDate(days: number, hour = 19, minute = 30) {
   date.setHours(hour, minute, 0, 0);
   return date.toISOString();
 }
+
+// Five poster files ship with the app and are used only when the catalog row
+// has no managed artwork. They are presentation assets, not catalog data.
+const posterOverrides: Record<string, string> = {
+  "captain-america-the-first-avenger": "/data/posters/captain-america-the-first-avenger.jpg",
+  "iron-man": "/data/posters/iron-man.jpg",
+  "iron-man-2": "/data/posters/iron-man-2.jpg",
+  thor: "/data/posters/thor.jpg",
+  "the-avengers": "/data/posters/the-avengers.jpg",
+};
 
 type WatchlistMovie = {
   id: string;
@@ -134,16 +130,8 @@ type WatchlistMovie = {
 
 type WatchlistPayload = { movies: WatchlistMovie[] };
 
-const previewPosterOverrides: Record<string, string> = {
-  "captain-america-the-first-avenger": "/data/posters/captain-america-the-first-avenger.jpg",
-  "iron-man": "/data/posters/iron-man.jpg",
-  "iron-man-2": "/data/posters/iron-man-2.jpg",
-  thor: "/data/posters/thor.jpg",
-  "the-avengers": "/data/posters/the-avengers.jpg",
-};
-
 function toCatalogTitle(movie: WatchlistMovie): CatalogTitle {
-  const posterUrl = movie.images?.poster_url ?? previewPosterOverrides[movie.id] ?? null;
+  const posterUrl = movie.images?.poster_url ?? posterOverrides[movie.id] ?? null;
   return {
     id: movie.id,
     titleType: movie.type,
@@ -168,6 +156,13 @@ function toCatalogTitle(movie: WatchlistMovie): CatalogTitle {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Development preview
+// ---------------------------------------------------------------------------
+// `npm run dev` without `npm run dev:pages` has no API. These fixtures keep the
+// design reviewable, but they are compiled into the production bundle only as
+// dead code and are never used when the API answers. The UI labels them.
+
 const fallbackCatalog: CatalogTitle[] = [
   { id: "captain-america-the-first-avenger", titleType: "film", title: "Captain America: The First Avenger", synopsis: "Steve Rogers becomes Captain America in WWII and meets Peggy Carter.", releaseYear: 2011, posterUrl: null, posterKey: null, active: true, watchOrder: 1, universe: "MCU", tier: "optional", layer: 4, layerLabel: "Deep background" },
   { id: "iron-man", titleType: "film", title: "Iron Man", synopsis: "Tony Stark builds the Iron Man suit and begins the MCU.", releaseYear: 2008, posterUrl: null, posterKey: null, active: true, watchOrder: 2, universe: "MCU", tier: "optional", layer: 4, layerLabel: "Deep background" },
@@ -176,10 +171,6 @@ const fallbackCatalog: CatalogTitle[] = [
   { id: "the-avengers", titleType: "film", title: "The Avengers", synopsis: "Earth's heroes unite to stop Loki's invasion.", releaseYear: 2012, posterUrl: null, posterKey: null, active: true, watchOrder: 5, universe: "MCU", tier: "optional", layer: 4, layerLabel: "Deep background" },
   { id: "iron-man-3", titleType: "film", title: "Iron Man 3", synopsis: "Tony battles the Mandarin and Extremis while dealing with PTSD.", releaseYear: 2013, posterUrl: null, posterKey: null, active: true, watchOrder: 6, universe: "MCU", tier: "optional", layer: 4, layerLabel: "Deep background" },
 ];
-
-function buildDemoCatalog() {
-  return fallbackCatalog;
-}
 
 async function loadLocalWatchlistCatalog() {
   const response = await fetch("/data/streak-collection/metadata.json", { cache: "no-store" });
@@ -199,82 +190,51 @@ function buildDemoScreenings(catalog: CatalogTitle[]): Screening[] {
     capacity: number,
     soldCount: number,
     priceMinor: number,
-    options: Partial<Pick<Screening, "cancelled" | "seasonNumber" | "episodeStart" | "episodeEnd">> = {},
   ): Screening => {
     const startsAt = futureDate(days, hour);
     const endsAt = futureDate(days, hour + 2, 0);
     const title = catalog.find((entry) => entry.id === titleId);
     return {
-      id,
-      titleId,
-      title: title?.title ?? titleId,
-      titleType: title?.titleType ?? "film",
-      titleActive: title?.active ?? false,
-      startsAt,
-      endsAt,
-      location,
-      capacity,
-      priceMinor,
-      salesOpenAt: new Date().toISOString(),
-      salesCloseAt: startsAt,
-      cancelled: false,
-      seasonNumber: null,
-      episodeStart: null,
-      episodeEnd: null,
-      soldCount,
-      heldCount: 0,
-      ...options,
+      id, titleId, title: title?.title ?? titleId, titleType: title?.titleType ?? "film",
+      titleActive: title?.active ?? false, startsAt, endsAt, location, capacity, priceMinor,
+      salesOpenAt: new Date().toISOString(), salesCloseAt: startsAt, cancelled: false,
+      seasonNumber: null, episodeStart: null, episodeEnd: null, soldCount, heldCount: 0,
     };
   };
-
   return [
     screening("showing-captain-friday", "captain-america-the-first-avenger", 2, 19, "Arc Cinema · Hall 01", 120, 86, 45000),
     screening("showing-iron-sunday", "iron-man", 4, 16, "Arc Cinema · Hall 01", 120, 42, 40000),
     screening("showing-iron-2-saturday", "iron-man-2", 3, 20, "Metro Screens · Hall 03", 90, 28, 55000),
     screening("showing-thor-thursday", "thor", 6, 21, "Arc Cinema · Hall 02", 90, 14, 50000),
-    screening("showing-avengers", "the-avengers", 8, 18, "The Lab · Studio A", 60, 18, 35000, {
-      seasonNumber: 1,
-      episodeStart: 1,
-      episodeEnd: 3,
-    }),
+    screening("showing-avengers", "the-avengers", 8, 18, "The Lab · Studio A", 60, 18, 35000),
     screening("showing-iron-3", "iron-man-3", 10, 20, "Arc Cinema · Hall 01", 120, 0, 60000),
   ];
 }
 
-function buildDemoBookings(catalog: CatalogTitle[], screenings: Screening[]): TicketBooking[] {
-  const show = screenings[0];
-  const title = catalog.find((entry) => entry.id === show.titleId);
-  return [{
-    id: "booking-demo-001",
-    orderCode: "MSY-8Q4K-2N7P",
-    screeningId: show.id,
-    titleId: show.titleId,
-    title: title?.title ?? show.title,
-    startsAt: show.startsAt,
-    endsAt: show.endsAt,
-    location: show.location,
-    quantity: 2,
-    amountMinor: show.priceMinor * 2,
-    status: "confirmed",
-    ticketStatus: "valid",
-    qrValue: "marvelsyllabus://ticket/MSY-8Q4K-2N7P",
-    createdAt: pastDate(2),
-  }];
-}
-
-function buildDemoSnapshot(catalog = buildDemoCatalog()): CustomerSnapshot {
+function buildDemoSnapshot(catalog = fallbackCatalog): CustomerSnapshot {
   const screenings = buildDemoScreenings(catalog);
-  const campaignReward: RewardGrant = {
-    id: "reward-campaign-50",
-    kind: "discount",
-    title: "50% off one ticket",
-    description: "A single-use discount for your next eligible screening.",
-    status: "reserved",
-    expiresAt: futureDate(9, 23, 59),
-    instructions: "Your reward applies automatically at checkout. One ticket per order is discounted.",
-    discountPercent: 50,
-    eligibleTitleIds: ["captain-america-the-first-avenger", "iron-man", "iron-man-2", "thor", "the-avengers", "iron-man-3"],
+  const campaign: RewardCampaign = {
+    id: "campaign-temporal-loom",
+    name: "Temporal Loom",
+    completedPlays: 1,
+    requiredPlays: 3,
+    completionWindowDays: 7,
+    expiresAt: futureDate(6, 23, 59),
+    status: "active",
+    eligible: true,
+    claimed: false,
+    reward: {
+      id: "reward-campaign-50",
+      kind: "discount",
+      title: "50% off one ticket",
+      description: "A single-use discount for your next eligible screening.",
+      status: "reserved",
+      expiresAt: futureDate(9, 23, 59),
+      instructions: "Your reward applies automatically at checkout.",
+      discountPercent: 50,
+    },
   };
+  const show = screenings[0];
   return {
     catalog,
     screenings,
@@ -283,26 +243,31 @@ function buildDemoSnapshot(catalog = buildDemoCatalog()): CustomerSnapshot {
       { titleId: "iron-man", seasonNumber: null, episodeNumber: null, watchedAt: pastDate(2) },
       { titleId: "iron-man-2", seasonNumber: null, episodeNumber: null, watchedAt: pastDate(1) },
     ],
-    banners: [
-      {
-        id: "banner-captain-america",
-        kicker: "FEATURED SCREENING",
-        title: "Follow the Doomsday watch order.",
-        copy: "The MarvelSyllabus archive is arranged for the story you want to follow next.",
-        imageUrl: "",
-        accent: "teal",
-        destinationTitleId: "captain-america-the-first-avenger",
-      },
-      {
-        id: "banner-rewards",
-        kicker: "PLAY · EARN · RETURN",
-        title: "Your next ticket is hiding in the game.",
-        copy: "Complete three Temporal Loom rounds and unlock the reward reserved for your account.",
-        imageUrl: "",
-        accent: "violet",
-      },
-    ],
-    bookings: buildDemoBookings(catalog, screenings),
+    banners: [{
+      id: "banner-preview",
+      kicker: "PREVIEW DATA",
+      title: "Follow the Doomsday watch order.",
+      copy: "The API is not running, so this build is showing local fixtures.",
+      imageUrl: "",
+      accent: "teal",
+      destinationTitleId: "captain-america-the-first-avenger",
+    }],
+    bookings: [{
+      id: "booking-demo-001",
+      orderCode: "MSY-8Q4K-2N7P",
+      screeningId: show.id,
+      titleId: show.titleId,
+      title: show.title,
+      startsAt: show.startsAt,
+      endsAt: show.endsAt,
+      location: show.location,
+      quantity: 2,
+      amountMinor: show.priceMinor * 2,
+      status: "confirmed",
+      ticketStatus: "valid",
+      qrValue: "marvelsyllabus://ticket/MSY-8Q4K-2N7P",
+      createdAt: pastDate(2),
+    }],
     rewards: [{
       id: "reward-demo-food",
       kind: "coupon",
@@ -310,49 +275,20 @@ function buildDemoSnapshot(catalog = buildDemoCatalog()): CustomerSnapshot {
       description: "A partner coupon code ready to use on dwrpar.com.",
       status: "available",
       expiresAt: futureDate(21, 23, 59),
-      instructions: "Copy this code and redeem it on dwrpar.com. MarvelSyllabus does not validate partner redemption.",
+      instructions: "Copy this code and redeem it on dwrpar.com.",
       code: "MSY-TREAT-7KQ2",
     }],
-    campaign: {
-      id: "campaign-temporal-loom",
-      name: "Temporal Loom",
-      completedPlays: 1,
-      requiredPlays: 3,
-      completionWindowDays: 7,
-      expiresAt: futureDate(6, 23, 59),
-      status: "active",
-      eligible: true,
-      claimed: false,
-      reward: campaignReward,
-    },
-    notifications: [
-      {
-        id: "notice-screening",
-        kind: "screening",
-        title: "Your screening is coming up",
-        body: "Captain America: The First Avenger · Friday at 7:00 PM · Arc Cinema Hall 01.",
-        createdAt: pastDate(0, 9, 15),
-        read: false,
-      },
-      {
-        id: "notice-reward",
-        kind: "reward",
-        title: "Your reward is reserved",
-        body: "Complete two more rounds in Temporal Loom before the window closes.",
-        createdAt: pastDate(1, 18, 0),
-        read: false,
-      },
-      {
-        id: "notice-welcome",
-        kind: "account",
-        title: "Welcome to MarvelSyllabus",
-        body: "Your watch progress and tickets will stay with your account across devices.",
-        createdAt: pastDate(4, 12, 0),
-        read: true,
-      },
-    ],
+    campaign,
+    notifications: [{
+      id: "notice-preview",
+      kind: "screening",
+      title: "Preview account",
+      body: "Connect the API to see real tickets, progress and rewards.",
+      createdAt: pastDate(0, 9, 15),
+      read: false,
+    }],
     settings: {
-      displayName: "Aarav Mehta",
+      displayName: "Preview Agent",
       shareWatched: true,
       shareStreak: true,
       productUpdates: true,
@@ -363,106 +299,171 @@ function buildDemoSnapshot(catalog = buildDemoCatalog()): CustomerSnapshot {
   };
 }
 
-function mergeStoredState(base: CustomerSnapshot): CustomerSnapshot {
-  try {
-    const raw = window.localStorage.getItem(CUSTOMER_STATE_KEY);
-    if (!raw) return base;
-    const saved = JSON.parse(raw) as Partial<CustomerSnapshot>;
-    return {
-      ...base,
-      ...saved,
-      catalog: base.catalog,
-      screenings: base.screenings,
-      banners: base.banners,
-      source: base.source,
-      settings: { ...base.settings, ...(saved.settings ?? {}) },
-      campaign: { ...base.campaign, ...(saved.campaign ?? {}), reward: { ...base.campaign.reward, ...(saved.campaign?.reward ?? {}) } },
-      bookings: Array.isArray(saved.bookings) ? saved.bookings : base.bookings,
-      rewards: Array.isArray(saved.rewards) ? saved.rewards : base.rewards,
-      progress: Array.isArray(saved.progress) ? saved.progress : base.progress,
-      notifications: Array.isArray(saved.notifications) ? saved.notifications : base.notifications,
-    };
-  } catch {
-    return base;
-  }
+// ---------------------------------------------------------------------------
+// Live snapshot
+// ---------------------------------------------------------------------------
+
+function fallbackSettings(qrDestination: string | null = null): CustomerSettings {
+  return {
+    displayName: "Member",
+    shareWatched: false,
+    shareStreak: false,
+    productUpdates: false,
+    reminderNotifications: false,
+    qrDestination,
+  };
 }
 
-export function persistCustomerState(snapshot: CustomerSnapshot) {
-  try {
-    window.localStorage.setItem(CUSTOMER_STATE_KEY, JSON.stringify({
-      bookings: snapshot.bookings,
-      rewards: snapshot.rewards,
-      campaign: snapshot.campaign,
-      progress: snapshot.progress,
-      notifications: snapshot.notifications,
-      settings: snapshot.settings,
-    }));
-  } catch {
-    // Storage is an enhancement. The in-memory experience should keep working.
-  }
+function emptyCampaign(): RewardCampaign {
+  return {
+    id: "",
+    name: "Temporal Loom",
+    completedPlays: 0,
+    requiredPlays: 3,
+    completionWindowDays: 7,
+    expiresAt: futureDate(7),
+    status: "paused",
+    eligible: false,
+    claimed: false,
+    reward: {
+      id: "reward-unavailable",
+      kind: "discount",
+      title: "No reward campaign is running",
+      description: "Rewards open when the operator starts the next campaign.",
+      status: "reserved",
+      expiresAt: futureDate(7),
+      instructions: "",
+    },
+  };
+}
+
+export function unavailableSnapshot(issues: string[]): CustomerSnapshot {
+  return {
+    catalog: [],
+    screenings: [],
+    progress: [],
+    banners: [],
+    bookings: [],
+    rewards: [],
+    campaign: emptyCampaign(),
+    notifications: [],
+    settings: fallbackSettings(),
+    source: "unavailable",
+    issues,
+  };
+}
+
+function featuredBanner(catalog: CatalogTitle[]): Banner[] {
+  const firstTitle = catalog[0];
+  return firstTitle ? [{
+    id: "live-featured-title",
+    kicker: "THE MARVELSYLLABUS ARCHIVE",
+    title: firstTitle.title,
+    copy: firstTitle.synopsis,
+    imageUrl: firstTitle.posterUrl ?? "",
+    accent: "teal",
+    destinationTitleId: firstTitle.id,
+  }] : [];
+}
+
+function toTicketBooking(entry: WalletBooking): TicketBooking {
+  const statuses: TicketBooking["status"][] = ["confirmed", "payment_pending", "refunded", "cancelled"];
+  const status = statuses.includes(entry.status as TicketBooking["status"])
+    ? entry.status as TicketBooking["status"]
+    : "payment_pending";
+  return { ...entry, status };
 }
 
 export async function loadCustomerSnapshot(getToken?: () => Promise<string | null>): Promise<CustomerSnapshot> {
-  let fallback = mergeStoredState(buildDemoSnapshot());
+  const issues: string[] = [];
+  let token: string | null = null;
   try {
-    fallback = mergeStoredState(buildDemoSnapshot(await loadLocalWatchlistCatalog()));
+    token = (await getToken?.()) ?? null;
   } catch {
-    // The compact fallback keeps the shell usable if the static watchlist cannot be fetched.
+    issues.push("auth_unavailable");
   }
-  const [catalogResult, screeningsResult, profileQrResult] = await Promise.allSettled([loadCatalog(), loadScreenings(), loadProfileQr()]);
-  const catalogReady = catalogResult.status === "fulfilled";
-  const screeningsReady = screeningsResult.status === "fulfilled";
-  const qrDestination = profileQrResult.status === "fulfilled"
-    ? profileQrResult.value.qrDestination
-    : fallback.settings.qrDestination;
-  if (!catalogReady || !screeningsReady) return { ...fallback, settings: { ...fallback.settings, qrDestination } };
 
+  const [catalogResult, screeningsResult, bannersResult, qrResult] = await Promise.allSettled([
+    loadCatalog(),
+    loadScreenings(),
+    loadBanners(),
+    loadProfileQr(),
+  ]);
+
+  if (catalogResult.status === "rejected" || screeningsResult.status === "rejected") {
+    if (import.meta.env.DEV) {
+      let preview = buildDemoSnapshot();
+      try {
+        preview = buildDemoSnapshot(await loadLocalWatchlistCatalog());
+      } catch {
+        // The compact preview is enough when static fixtures are unavailable.
+      }
+      return { ...preview, source: "demo", issues: ["api_unreachable"] };
+    }
+    return unavailableSnapshot(["catalog_or_screenings_unavailable"]);
+  }
+
+  const catalog = catalogResult.value.map((title) => ({
+    ...title,
+    posterUrl: title.posterUrl ?? posterOverrides[title.id] ?? null,
+  }));
+  const screenings = screeningsResult.value;
+  const qrDestination = qrResult.status === "fulfilled" ? qrResult.value.qrDestination : null;
+  const banners = bannersResult.status === "fulfilled" && bannersResult.value.length > 0
+    ? bannersResult.value
+    : featuredBanner(catalog);
+
+  let settings = fallbackSettings(qrDestination);
   let progress: WatchedItem[] = [];
-  try {
-    const token = await getToken?.();
-    if (token) progress = await loadProgress(token);
-  } catch {
-    progress = [];
+  let bookings: TicketBooking[] = [];
+  let rewards: RewardGrant[] = [];
+  let campaign = emptyCampaign();
+
+  if (token) {
+    const [accountResult, progressResult, walletResult, rewardsResult] = await Promise.allSettled([
+      loadAccount(token),
+      loadProgress(token),
+      loadWallet(token),
+      loadRewards(token),
+    ]);
+
+    if (accountResult.status === "fulfilled") {
+      settings = accountResult.value;
+    } else {
+      issues.push("account_unavailable");
+    }
+    if (progressResult.status === "fulfilled") {
+      progress = progressResult.value;
+    } else {
+      issues.push("progress_unavailable");
+    }
+    // A paid ticket only exists on the server. Never let local rows stand in
+    // for the wallet; an empty wallet is the truthful answer.
+    if (walletResult.status === "fulfilled") {
+      bookings = walletResult.value.map(toTicketBooking);
+    } else {
+      issues.push("wallet_unavailable");
+    }
+    if (rewardsResult.status === "fulfilled") {
+      campaign = rewardsResult.value.campaign;
+      rewards = rewardsResult.value.grants;
+    } else {
+      issues.push("rewards_unavailable");
+    }
   }
 
-  const catalog = catalogResult.value.map((title) => {
-    const source = fallback.catalog.find((entry) => entry.id === title.id);
-    return source ? { ...source, ...title, posterUrl: title.posterUrl ?? source.posterUrl } : title;
-  });
-  const firstTitle = catalog[0];
   return {
-    ...fallback,
     catalog,
-    screenings: screeningsResult.value,
+    screenings,
     progress,
-    banners: firstTitle ? [{
-      id: "live-featured-title",
-      kicker: "THE MARVELSYLLABUS ARCHIVE",
-      title: firstTitle.title,
-      copy: firstTitle.synopsis,
-      imageUrl: firstTitle.posterUrl ?? "",
-      accent: "teal",
-      destinationTitleId: firstTitle.id,
-    }] : [],
-    bookings: [],
-    rewards: [],
-    campaign: {
-      ...fallback.campaign,
-      status: "paused",
-      eligible: false,
-      completedPlays: 0,
-      claimed: false,
-      reward: { ...fallback.campaign.reward, status: "reserved" },
-    },
+    banners,
+    bookings,
+    rewards,
+    campaign,
     notifications: [],
-    settings: {
-      ...fallback.settings,
-      displayName: "Member",
-      shareWatched: false,
-      shareStreak: false,
-      qrDestination,
-    },
+    settings,
     source: "api",
+    ...(issues.length ? { issues } : {}),
   };
 }
 
@@ -478,6 +479,22 @@ export async function saveWatchedProgress(
       body: JSON.stringify({ ...item, watched }),
     });
   }
+}
+
+export async function saveCustomerSettings(
+  settings: Partial<CustomerSettings>,
+  getToken?: () => Promise<string | null>,
+) {
+  const token = await getToken?.();
+  if (!token) return null;
+  const { displayName, shareWatched, shareStreak, productUpdates, reminderNotifications } = settings;
+  return saveAccount(token, {
+    ...(displayName === undefined ? {} : { displayName }),
+    ...(shareWatched === undefined ? {} : { shareWatched }),
+    ...(shareStreak === undefined ? {} : { shareStreak }),
+    ...(productUpdates === undefined ? {} : { productUpdates }),
+    ...(reminderNotifications === undefined ? {} : { reminderNotifications }),
+  });
 }
 
 export function titleForScreening(screening: Screening, catalog: CatalogTitle[]) {

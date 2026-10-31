@@ -4,10 +4,10 @@ Three surfaces, one backend:
 
 | App | Folder | What it is | Where it hosts |
 | --- | --- | --- | --- |
-| Customer web app | [`prototype/`](./prototype/) | Vite + React ticket discovery, wallet, rewards game | Cloudflare Pages (`frame-catalog`) |
-| Command Deck (admin) | [`admin/`](./admin/) | Vite + React operator console: catalog, screenings, banners, rewards, activity | Cloudflare Pages (`marvelsyllabus-command-deck`) |
+| Customer web app | [`prototype/`](./prototype/) | Vite + React ticket discovery, wallet, rewards game | Cloudflare Pages (`frame-catalog`) or Vercel |
+| Command Deck (admin) | [`admin/`](./admin/) | Vite + React operator console: catalog, screenings, banners, rewards, activity | Cloudflare Pages (`marvelsyllabus-command-deck`) or Vercel |
 | Gatekeeper (door staff) | [`door_staff_app/`](./door_staff_app/) | Flutter Android scanner for check-in | Sideloaded APK on staff phones |
-| Shared API | [`prototype/functions/api/[[path]].ts`](./prototype/functions/api/%5B%5Bpath%5D%5D.ts) (re-exported by `admin/functions`) | Single source of truth: catalog, holds, wallet, staff validation/check-in | Pages Functions on the customer domain |
+| Shared API | [`backend/src/worker.ts`](./backend/src/worker.ts) (re-exported by `prototype/functions`, `admin/functions` for Cloudflare and `prototype/api`, `admin/api` for Vercel) | Single source of truth: catalog, holds, wallet, staff validation/check-in | Pages Functions on the customer domain, or a Vercel Function beside the frontend |
 
 ## 1. How the three apps talk (REST, not WebSockets)
 
@@ -112,12 +112,14 @@ BACKUP_RESTORE_KEY            # only in the protected recovery environment
 ## 4. Push the server live (database → API → web apps)
 
 ```powershell
-# 1. Migrate Neon (order matters; 003 adds the ticket/check-in contract, 004 the full-access admin categories)
+# 1. Migrate Neon (order matters; 003 adds the ticket/check-in contract, 004 the full-access admin categories, 006 the customer profile/reward columns)
 cd prototype
 psql "$env:DATABASE_URL" -f db/001_catalog.sql
 psql "$env:DATABASE_URL" -f db/002_admin.sql
 psql "$env:DATABASE_URL" -f db/003_tickets.sql
 psql "$env:DATABASE_URL" -f db/004_admin_full_access.sql
+psql "$env:DATABASE_URL" -f db/005_screenings_updated_at.sql
+psql "$env:DATABASE_URL" -f db/006_customer_accounts.sql
 ```
 
 ```powershell
@@ -149,6 +151,41 @@ node scripts/import-catalog.mjs --input "..\ring\doomsday_watchlist (1).json" --
 All titles start visible and inactive (`Upcoming`). Never import unverified
 external poster URLs. The preview-data ribbon in the customer app must disappear
 only after live catalog/screening/account APIs return real data.
+
+## 4b. Deploying on Vercel instead of Cloudflare Pages
+
+A plain Vite deploy on Vercel serves only `dist`: Vercel ignores
+`functions/api/`, so `/api/*` returns the SPA and the customer app looks like it
+is still on demo data. Both apps therefore ship a Vercel entrypoint that adapts
+the same worker:
+
+- `prototype/api/[...path].ts` and `admin/api/[...path].ts` re-export
+  `backend/src/vercel.ts`, which translates Node requests to the worker's
+  Web-standard contract and back. No route, auth rule or SQL query is copied.
+- `prototype/vercel.json` and `admin/vercel.json` pin the Vite build, `dist`
+  output, region `sin1` and a 30s limit for `api/**`.
+
+1. Import the repository once per app and set **Root Directory** to `prototype`
+   and `admin`.
+2. Keep **Include source files outside of the Root Directory in the Build Step**
+   enabled (the default). The function imports `../backend/src`; with that
+   option off the build cannot resolve the shared adapter.
+3. Add the section 3 variables to both projects (Production and Preview) plus
+   the build-time `VITE_CLERK_PUBLISHABLE_KEY`. Add `VITE_API_BASE_URL` only
+   when the API lives on another origin, and then set `CORS_ORIGINS` on that
+   API host.
+4. Apply migrations 001-006 to the same Neon database.
+5. Deploy and check both surfaces:
+   - `https://<customer>.vercel.app/api/health` returns `ok: true, database: true`.
+   - `https://<admin>.vercel.app/api/health` returns the same counts.
+6. Interpreting failures: a 404 means the function was not built (wrong Root
+   Directory); a 503 means `DATABASE_URL` is wrong or a migration is missing.
+   The customer app keeps its preview-data notice until `/api/catalog`,
+   `/api/screenings` and `/api/account` all answer.
+
+Vercel and Cloudflare can share one database. Pick one host as the canonical
+API and point the other at it with `VITE_API_BASE_URL` + `CORS_ORIGINS` rather
+than running two independent write paths.
 
 ## 5. Push the door app live (staff phones)
 

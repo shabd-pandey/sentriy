@@ -8,7 +8,7 @@
     "build": "tsc -b && npm run check:worker && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "check:worker": "tsc --noEmit --target ES2022 --lib ES2022,DOM,DOM.Iterable --module ESNext --moduleResolution Bundler --skipLibCheck \"functions/api/[[path]].ts\"",
+    "check:worker": "tsc --noEmit --target ES2022 --lib ES2022,DOM,DOM.Iterable --module ESNext --moduleResolution Bundler --skipLibCheck \"functions/api/[[path]].ts\" \"api/[...path].ts\"",
     "dev:pages": "wrangler pages dev dist",
     "deploy:pages": "wrangler pages deploy dist"
   },
