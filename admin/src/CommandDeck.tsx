@@ -1103,7 +1103,7 @@ function SystemTab({ snapshot, onCommit, live }: { snapshot: AdminSnapshot; onCo
 
   const runImport = () => {
     if (!live) {
-      setError("Catalog import writes to the shared database — sign in as an admin first.");
+      setError("Catalog import writes to the shared database, but the Command Deck cannot reach it right now.");
       return;
     }
     let parsed: unknown;
