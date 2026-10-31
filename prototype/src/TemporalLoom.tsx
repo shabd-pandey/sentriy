@@ -27,8 +27,39 @@ type Thread = {
 const GAME_SECONDS = 30;
 const TARGET_RADIUS = 96;
 
+// Keep the loom cheap: a handful of free threads plus the ones already bound.
+// The old board could reach 42 threads, each drawn with a canvas shadow.
+const MAX_FREE_THREADS = 12;
+const MAX_ATTACHED_THREADS = 10;
+// A full-screen canvas at 2x device pixel ratio is millions of pixels to fill
+// every frame. Cap the pixel budget instead of the ratio, so large monitors
+// drop to 1x and phones keep a crisp 2x only when there is headroom.
+const MAX_CANVAS_PIXELS = 2_000_000;
+const FRAME_INTERVAL = 1000 / 60;
+const TAU = Math.PI * 2;
+
 function formatScore(value: number) {
   return value.toString().padStart(6, "0");
+}
+
+/**
+ * A pre-rendered bloom. Drawing this sprite is a single blit, while
+ * `shadowBlur` is a gaussian blur recomputed for every path on every frame.
+ */
+function createGlowSprite() {
+  const size = 64;
+  const sprite = document.createElement("canvas");
+  sprite.width = size;
+  sprite.height = size;
+  const spriteContext = sprite.getContext("2d");
+  if (!spriteContext) return null;
+  const gradient = spriteContext.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+  gradient.addColorStop(0, "rgba(206, 255, 178, 0.95)");
+  gradient.addColorStop(0.3, "rgba(132, 255, 110, 0.5)");
+  gradient.addColorStop(1, "rgba(90, 255, 90, 0)");
+  spriteContext.fillStyle = gradient;
+  spriteContext.fillRect(0, 0, size, size);
+  return sprite;
 }
 
 export default function TemporalLoom({ rewardReady, saving, onComplete, onClaim, onClose }: TemporalLoomProps) {
@@ -47,6 +78,7 @@ export default function TemporalLoom({ rewardReady, saving, onComplete, onClaim,
   const [accuracy, setAccuracy] = useState(100);
   const attemptsRef = useRef(0);
   const completionSentRef = useRef(false);
+  const glowRef = useRef<HTMLCanvasElement | null>(null);
 
   const updateState = useCallback((nextState: GameState) => {
     stateRef.current = nextState;
@@ -130,37 +162,46 @@ export default function TemporalLoom({ rewardReady, saving, onComplete, onClaim,
     const stage = stageRef.current;
     if (!canvas || !stage) return;
 
-    const context = canvas.getContext("2d");
+    const context = canvas.getContext("2d", { alpha: true, desynchronized: true });
     if (!context) return;
-    let animationFrame = 0;
 
-    const resize = () => {
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = stage.clientWidth * ratio;
-      canvas.height = stage.clientHeight * ratio;
-      canvas.style.width = `${stage.clientWidth}px`;
-      canvas.style.height = `${stage.clientHeight}px`;
-      context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    };
+    const glow = glowRef.current ?? createGlowSprite();
+    glowRef.current = glow;
 
-    const draw = (now: number) => {
+    const playing = gameState === "playing";
+    let frame = 0;
+    let lastFrame = 0;
+    let disposed = false;
+
+    const paint = (now: number) => {
       const width = stage.clientWidth;
       const height = stage.clientHeight;
+      if (width < 2 || height < 2) return;
       const centerX = width * 0.5;
       const centerY = height * 0.58;
+
       context.clearRect(0, 0, width, height);
 
       if (stateRef.current === "playing" && now - lastSpawnRef.current > 1250) {
-        const amount = Math.random() > 0.45 ? 2 : 1;
-        for (let i = 0; i < amount; i += 1) spawnThread(width, height);
         lastSpawnRef.current = now;
-        if (threadsRef.current.length > 42) {
-          const removable = threadsRef.current.findIndex((thread) => !thread.attached);
-          if (removable >= 0) threadsRef.current.splice(removable, 1);
+        // Retire the oldest bound thread so the board never fills up: with a
+        // hard cap, a busy player would eventually starve the loom of threads.
+        const held = threadsRef.current.filter((thread) => thread.attached).length;
+        if (held > MAX_ATTACHED_THREADS) {
+          const oldest = threadsRef.current.findIndex((thread) => thread.attached);
+          if (oldest >= 0) threadsRef.current.splice(oldest, 1);
+        }
+        const free = threadsRef.current.filter((thread) => !thread.attached).length;
+        if (free < MAX_FREE_THREADS) {
+          const amount = Math.min(MAX_FREE_THREADS - free, Math.random() > 0.45 ? 2 : 1);
+          for (let i = 0; i < amount; i += 1) spawnThread(width, height);
         }
       }
 
-      threadsRef.current.forEach((thread) => {
+      // Two plain strokes and a cached glow per thread. No shadowBlur, no
+      // per-thread save/restore: this is the whole per-frame cost now.
+      context.globalCompositeOperation = "lighter";
+      for (const thread of threadsRef.current) {
         if (!thread.dragging && !thread.attached) {
           thread.endX += Math.sin(now * 0.0016 + thread.seed) * 0.3;
           thread.endY += Math.cos(now * 0.0013 + thread.seed) * 0.3;
@@ -170,56 +211,87 @@ export default function TemporalLoom({ rewardReady, saving, onComplete, onClaim,
         const destinationY = thread.attached ? centerY : thread.endY;
         const dx = destinationX - thread.startX;
         const dy = destinationY - thread.startY;
-        const normalX = -dy;
-        const normalY = dx;
         const length = Math.max(Math.hypot(dx, dy), 1);
         const wave = Math.sin(now * 0.002 + thread.seed) * (thread.attached ? 18 : 34);
-        const controlX = thread.startX + dx * 0.52 + (normalX / length) * wave;
-        const controlY = thread.startY + dy * 0.52 + (normalY / length) * wave;
+        const controlX = thread.startX + dx * 0.52 + (-dy / length) * wave;
+        const controlY = thread.startY + dy * 0.52 + (dx / length) * wave;
 
-        context.save();
         context.beginPath();
         context.moveTo(thread.startX, thread.startY);
         context.quadraticCurveTo(controlX, controlY, destinationX, destinationY);
-        context.strokeStyle = `hsla(${thread.hue}, 90%, ${thread.attached ? 66 : 48}%, ${thread.attached ? 0.95 : 0.68})`;
-        context.lineWidth = thread.attached ? 2.4 : 1.6;
-        context.shadowColor = `hsla(${thread.hue}, 100%, 60%, 1)`;
-        context.shadowBlur = stateRef.current === "finished" ? 24 : thread.attached ? 11 : 4;
+        context.strokeStyle = `hsla(${thread.hue}, 92%, 56%, ${thread.attached ? 0.3 : 0.15})`;
+        context.lineWidth = thread.attached ? 7 : 4.5;
+        context.stroke();
+        context.strokeStyle = `hsla(${thread.hue}, 95%, ${thread.attached ? 72 : 62}%, ${thread.attached ? 0.95 : 0.7})`;
+        context.lineWidth = thread.attached ? 2 : 1.3;
         context.stroke();
 
+        const radius = thread.dragging ? 13 : 10;
+        if (glow) context.drawImage(glow, destinationX - radius, destinationY - radius, radius * 2, radius * 2);
+        context.fillStyle = thread.attached ? "rgba(206, 255, 178, .95)" : "rgba(150, 255, 130, .85)";
         context.beginPath();
-        context.arc(destinationX, destinationY, thread.dragging ? 10 : 7, 0, Math.PI * 2);
-        context.fillStyle = thread.attached ? "rgba(168, 255, 126, .88)" : "rgba(116, 255, 107, .72)";
-        context.shadowBlur = 18;
+        context.arc(destinationX, destinationY, thread.dragging ? 4.5 : 3.2, 0, TAU);
         context.fill();
-        context.restore();
-      });
-
-      if (stateRef.current === "playing") {
-        const pulse = 1 + Math.sin(now * 0.004) * 0.08;
-        context.save();
-        context.beginPath();
-        context.arc(centerX, centerY, 62 * pulse, 0, Math.PI * 2);
-        context.strokeStyle = "rgba(157, 255, 117, .38)";
-        context.setLineDash([4, 9]);
-        context.lineWidth = 1.5;
-        context.shadowColor = "#8dff65";
-        context.shadowBlur = 16;
-        context.stroke();
-        context.restore();
       }
 
-      animationFrame = requestAnimationFrame(draw);
+      if (stateRef.current === "playing" || stateRef.current === "finished") {
+        const pulse = 1 + Math.sin(now * 0.004) * 0.08;
+        const ringRadius = 62 * pulse;
+        context.beginPath();
+        context.arc(centerX, centerY, ringRadius, 0, TAU);
+        context.strokeStyle = "rgba(157, 255, 117, .16)";
+        context.lineWidth = 7;
+        context.stroke();
+        context.setLineDash([4, 9]);
+        context.strokeStyle = "rgba(157, 255, 117, .5)";
+        context.lineWidth = 1.5;
+        context.stroke();
+        context.setLineDash([]);
+      }
+
+      context.globalCompositeOperation = "source-over";
+    };
+
+    const resize = () => {
+      const width = Math.max(1, stage.clientWidth);
+      const height = Math.max(1, stage.clientHeight);
+      const preferred = Math.min(window.devicePixelRatio || 1, 2);
+      const budget = Math.sqrt(MAX_CANVAS_PIXELS / (width * height));
+      const ratio = Math.max(0.6, Math.min(preferred, budget));
+      const pixelWidth = Math.round(width * ratio);
+      const pixelHeight = Math.round(height * ratio);
+      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+        canvas.width = pixelWidth;
+        canvas.height = pixelHeight;
+      }
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      context.setTransform(ratio, 0, 0, ratio, 0, 0);
+      if (!playing) paint(performance.now());
+    };
+
+    const loop = (now: number) => {
+      if (disposed) return;
+      frame = requestAnimationFrame(loop);
+      // Cap at 60fps: high refresh screens otherwise redraw twice as often.
+      if (now - lastFrame < FRAME_INTERVAL - 1.5) return;
+      lastFrame = now;
+      paint(now);
     };
 
     resize();
-    window.addEventListener("resize", resize);
-    animationFrame = requestAnimationFrame(draw);
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(resize) : null;
+    observer?.observe(stage);
+    // The canvas only animates while a round is running. Idle screens draw a
+    // single frame instead of burning a full frame every 16ms behind a panel.
+    if (playing) frame = requestAnimationFrame(loop);
+
     return () => {
-      cancelAnimationFrame(animationFrame);
-      window.removeEventListener("resize", resize);
+      disposed = true;
+      cancelAnimationFrame(frame);
+      observer?.disconnect();
     };
-  }, [spawnThread]);
+  }, [gameState, spawnThread]);
 
   const getPointerPosition = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
