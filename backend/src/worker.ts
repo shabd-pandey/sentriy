@@ -317,12 +317,10 @@ async function loadCustomerGrants(db: Db, userId: string) {
 }
 
 async function loadRewardsState(db: Db, userId: string) {
-  const [eligibility] = await db`
-    SELECT EXISTS(
-      SELECT 1 FROM bookings WHERE user_id = ${userId} AND status = 'confirmed'
-    ) AS eligible
-  `;
-  const eligible = Boolean(eligibility?.eligible);
+  // The Temporal Loom is open to everyone. A guest can play and earn with no
+  // account, no confirmed ticket and no payment, so eligibility is no longer
+  // derived from bookings. The field stays in the payload for older clients.
+  const eligible = true;
 
   await db`
     UPDATE reward_grants SET status = 'expired'
@@ -601,7 +599,6 @@ async function route({ request, env }: PagesContext): Promise<Response> {
     const user = await authenticatedUser(request, env);
     const state = await loadRewardsState(db, user.sub);
     if (!state.campaign.id) return json({ error: "no_reward_campaign" }, 404);
-    if (!state.campaign.eligible) return json({ error: "rewards_locked" }, 403);
     if (state.campaign.completedPlays >= state.campaign.requiredPlays) return json({ error: "campaign_complete" }, 409);
     const [enrollment] = await db`
       SELECT id FROM campaign_enrollments

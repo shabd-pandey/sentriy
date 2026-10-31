@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 type TemporalLoomProps = {
-  completedPlays: number;
-  requiredPlays: number;
-  demoMode?: boolean;
+  /** Server truth: the campaign just granted a reward, so claim it now. */
+  rewardReady: boolean;
+  /** True while the finished round is being written to the account. */
+  saving: boolean;
   onComplete: () => void;
   onClaim: () => void;
   onClose: () => void;
@@ -30,7 +31,7 @@ function formatScore(value: number) {
   return value.toString().padStart(6, "0");
 }
 
-export default function TemporalLoom({ completedPlays, requiredPlays, onComplete, onClaim, onClose }: TemporalLoomProps) {
+export default function TemporalLoom({ rewardReady, saving, onComplete, onClaim, onClose }: TemporalLoomProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const threadsRef = useRef<Thread[]>([]);
@@ -362,11 +363,11 @@ export default function TemporalLoom({ completedPlays, requiredPlays, onComplete
               <div><strong>{accuracy}%</strong><span>ACCURACY</span></div>
             </div>
             {gameState === "finished" ? (
-              <button type="button" className="primary-action" onClick={() => {
-                if (completedPlays + 1 >= requiredPlays) onClaim();
+              <button type="button" className="primary-action" disabled={saving} onClick={() => {
+                if (rewardReady) onClaim();
                 else onClose();
               }}>
-                {completedPlays + 1 >= requiredPlays ? "CLAIM YOUR REWARD" : "SAVE ROUND"} <span>→</span>
+                {saving ? "SYNCING ROUND…" : rewardReady ? "CLAIM YOUR REWARD" : "SAVE ROUND"} <span>→</span>
               </button>
             ) : (
               <div className="reward">

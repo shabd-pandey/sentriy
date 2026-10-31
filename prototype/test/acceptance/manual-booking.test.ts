@@ -124,6 +124,44 @@ describe("manual booking confirmation", () => {
     expect(ticket.body.status).not.toBe("valid");
   });
 
+  it("lets a guest play and earn with no ticket", async () => {
+    const h = harness();
+    await seedScreening(h);
+    await h.query(
+      `INSERT INTO reward_campaigns (name, status, reward_kind, discount_percent,
+         required_plays, completion_window_days, reward_expiry_days, reward_cap, instructions)
+       VALUES ('Temporal Loom', 'active', 'discount', 30, 3, 7, 30, 100, 'Apply at checkout.')`,
+    );
+    const [before] = await h.query<{ count: number }>("SELECT count(*)::integer AS count FROM bookings");
+    expect(before.count).toBe(0);
+
+    const state = await h.call({ path: "/api/rewards", headers: guestHeaders });
+    expect(state.status).toBe(200);
+    expect(state.body.campaign).toMatchObject({ eligible: true, requiredPlays: 3 });
+    expect(state.body.campaign.id).not.toBe("");
+
+    for (let round = 1; round <= 3; round += 1) {
+      const start = await h.call({ method: "POST", path: "/api/rewards/rounds/start", headers: guestHeaders });
+      expect(start.status).toBe(201);
+      // The worker refuses rounds shorter than eight seconds; move the clock.
+      await h.query(
+        `UPDATE campaign_enrollments
+         SET round_started_at = now() - interval '10 seconds',
+           active_round_expires_at = now() + interval '4 minutes'
+         WHERE user_id = $1`,
+        [GUEST],
+      );
+      const done = await h.call({ method: "POST", path: "/api/rewards/rounds/complete", headers: guestHeaders });
+      expect(done.status).toBe(200);
+      expect(done.body.campaign.completedPlays).toBe(round);
+    }
+
+    const claimed = await h.call({ method: "POST", path: "/api/rewards/claim", headers: guestHeaders });
+    expect(claimed.status).toBe(200);
+    expect(claimed.body.campaign.claimed).toBe(true);
+    expect(claimed.body.grants[0]).toMatchObject({ status: "available" });
+  });
+
   it("keeps admin routes closed without the demo admin marker", async () => {
     const h = harness();
     await seedScreening(h);

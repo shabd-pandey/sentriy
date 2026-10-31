@@ -120,7 +120,7 @@ describe("customer account, rewards and reward-aware checkout", () => {
     expect(anonymous.status).toBe(401);
   });
 
-  it("locks rewards until a paid ticket exists", async () => {
+  it("opens the Loom to everyone, even without a ticket", async () => {
     const h = harness();
     await seedScreening(h);
     await seedCampaign(h);
@@ -128,11 +128,10 @@ describe("customer account, rewards and reward-aware checkout", () => {
 
     const state = await h.call({ path: "/api/rewards", token });
     expect(state.status).toBe(200);
-    expect(state.body.campaign).toMatchObject({ eligible: false, completedPlays: 0, status: "active" });
+    expect(state.body.campaign).toMatchObject({ eligible: true, completedPlays: 0, status: "active" });
 
     const start = await h.call({ method: "POST", path: "/api/rewards/rounds/start", token });
-    expect(start.status).toBe(403);
-    expect(start.body.error).toBe("rewards_locked");
+    expect(start.status).toBe(201);
   });
 
   it("records three rounds, grants the reward and discounts checkout", async () => {

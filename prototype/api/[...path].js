@@ -181,12 +181,7 @@ async function loadCustomerGrants(db, userId) {
   return rows;
 }
 async function loadRewardsState(db, userId) {
-  const [eligibility] = await db`
-    SELECT EXISTS(
-      SELECT 1 FROM bookings WHERE user_id = ${userId} AND status = 'confirmed'
-    ) AS eligible
-  `;
-  const eligible = Boolean(eligibility?.eligible);
+  const eligible = true;
   await db`
     UPDATE reward_grants SET status = 'expired'
     WHERE user_id = ${userId} AND status = 'available'
@@ -431,7 +426,6 @@ async function route({ request, env }) {
     const user = await authenticatedUser(request, env);
     const state = await loadRewardsState(db, user.sub);
     if (!state.campaign.id) return json({ error: "no_reward_campaign" }, 404);
-    if (!state.campaign.eligible) return json({ error: "rewards_locked" }, 403);
     if (state.campaign.completedPlays >= state.campaign.requiredPlays) return json({ error: "campaign_complete" }, 409);
     const [enrollment] = await db`
       SELECT id FROM campaign_enrollments
