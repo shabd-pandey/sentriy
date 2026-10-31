@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && npm run check:worker && vite build",
+    "build": "npm run build:api && tsc -b && npm run check:worker && vite build",
+    "build:api": "node scripts/build-api.mjs",
     "preview": "vite preview",
     "test": "vitest run",
-    "check:worker": "tsc --noEmit --target ES2022 --lib ES2022,DOM,DOM.Iterable --module ESNext --moduleResolution Bundler --skipLibCheck \"functions/api/[[path]].ts\" \"api/[...path].ts\"",
+    "check:worker": "tsc --noEmit --target ES2022 --lib ES2022,DOM,DOM.Iterable --module ESNext --moduleResolution Bundler --skipLibCheck \"functions/api/[[path]].ts\" \"../backend/src/vercel.ts\"",
     "dev:pages": "wrangler pages dev dist",
     "deploy:pages": "wrangler pages deploy dist"
   },
@@ -27,6 +28,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.0",
+    "esbuild": "^0.28.2",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
     "vite": "^8.0.5",

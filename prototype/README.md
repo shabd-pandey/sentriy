@@ -41,11 +41,13 @@ For hot reload with a live API, keep `npm run dev:pages` running and start `npm 
 
 ## Deploying on Vercel
 
-Vercel does **not** run `functions/api/[[path]].ts` (that is a Cloudflare Pages convention), so a plain Vite deploy serves the UI with no `/api` and the app has no live data. The Vercel entrypoint is `api/[...path].ts`, which re-exports `backend/src/vercel.ts` - a Node adapter around the same worker. Nothing is duplicated: Cloudflare and Vercel run the same routes, SQL and auth.
+Vercel does **not** run `functions/api/[[path]].ts` (that is a Cloudflare Pages convention), so the Vercel function is a separate entrypoint: `api/[...path].js`, a build-time bundle of `backend/src/vercel.ts` - a Node adapter around the same worker. Nothing is duplicated: Cloudflare and Vercel run the same routes, SQL and auth.
 
-1. Import the repository at vercel.com and set **Root Directory** to `prototype`.
-2. Leave **Include source files outside of the Root Directory in the Build Step** enabled (the default). The function imports `backend/src`, which lives above `prototype/`; with that option off the build fails to resolve it.
-3. `vercel.json` already pins the framework (`vite`), build (`npm run build`), output (`dist`), region (`sin1`) and a 30s limit for `api/**`.
+`api/[...path].js` is **generated**, not hand-written. `npm run build:api` (`scripts/build-api.mjs`, esbuild) bundles the adapter and worker into one file and `npm run build` runs it first, so the committed copy cannot drift. The bundle is required because Vercel's Node builder does not transpile or trace TypeScript imports that live outside `api/`; a plain re-export of `backend/src/vercel.ts` fails at runtime with `ERR_MODULE_NOT_FOUND`. Do not edit `api/[...path].js` by hand.
+
+1. Import the repository at vercel.com and, in the monorepo, set **Root Directory** to `prototype` (the standalone `movieticketbooking` repo keeps the app at its root).
+2. Leave **Include source files outside of the Root Directory in the Build Step** enabled (the default) if `backend/` sits above the project root; the bundler reads `backend/src/vercel.ts` there. The standalone repo vendors `backend/` inside the project, so no outside files are needed.
+3. `vercel.json` already pins the framework (`vite`), build (`npm run build`), output (`dist`), region (`sin1`) and a 30s limit for `api/**/*.js`.
 4. Add the environment variables below for **Production** and **Preview**.
 5. Apply every migration in `db/` (001 through 006) to the same Neon database.
 6. Deploy, then open `https://<project>.vercel.app/api/health`. It must answer `{"ok":true,"database":true,...}`. A 404 means the function was not built; `ok:false` with `database:false` means `DATABASE_URL` is wrong or unreachable.
@@ -63,7 +65,7 @@ Vercel does **not** run `functions/api/[[path]].ts` (that is a Cloudflare Pages 
 | `VITE_API_BASE_URL` | build | Optional absolute API origin (for example a Cloudflare Worker). Leave empty for same-origin `/api` |
 | `VITE_RAZORPAY_KEY_ID` | build | Optional public Razorpay key id; `/api/config` is preferred and overrides it |
 
-The admin Command Deck deploys the same way from `admin/` (its own `api/[...path].ts` re-exports the same adapter), so both Vercel projects read one database and one set of rules.
+The admin Command Deck deploys the same way from `admin/` (its own `scripts/build-api.mjs` generates `admin/api/[...path].js` from the same adapter), so both Vercel projects read one database and one set of rules.
 
 ## Checkout
 
