@@ -129,10 +129,74 @@ function TicketQr({ value }: { value: string }) {
 function loadCardImage(source: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = reject;
+    // Posters come from object storage, so the image must be requested in CORS
+    // mode. Without it the (successfully loaded) poster taints the canvas and
+    // canvas.toBlob() throws a SecurityError, which is why the share card could
+    // never be prepared.
+    image.crossOrigin = "anonymous";
+    image.decoding = "async";
+    const timer = window.setTimeout(() => reject(new Error("card_image_timeout")), 6000);
+    image.onload = () => {
+      window.clearTimeout(timer);
+      resolve(image);
+    };
+    image.onerror = () => {
+      window.clearTimeout(timer);
+      reject(new Error("card_image_unavailable"));
+    };
     image.src = source;
   });
+}
+
+const SHARE_CARD_FILE = "marvelsyllabus-id-card.jpg";
+
+/** The rendered card is cached so a repeat tap shares instantly, which keeps
+ *  the browser's user gesture alive (Safari drops it if rendering takes long). */
+let shareCardCache: { key: string; file: File; text: string } | null = null;
+
+function shareCardKey(snapshot: CustomerSnapshot) {
+  const title = snapshot.catalog.find((entry) => entry.active) ?? snapshot.catalog[0];
+  return [
+    snapshot.settings.displayName,
+    snapshot.settings.shareWatched,
+    snapshot.settings.shareStreak,
+    snapshot.progress.length,
+    streakLength(snapshot.progress),
+    snapshot.settings.qrDestination ?? "",
+    title?.posterUrl ?? "",
+  ].join("|");
+}
+
+async function buildShareCard(snapshot: CustomerSnapshot) {
+  const key = shareCardKey(snapshot);
+  if (shareCardCache?.key === key) return shareCardCache;
+  const parts = [
+    snapshot.settings.shareWatched ? `${snapshot.progress.length} watched moments` : null,
+    snapshot.settings.shareStreak ? `a ${streakLength(snapshot.progress)} day streak` : null,
+  ].filter(Boolean);
+  const file = await renderProfileShareCard(snapshot);
+  shareCardCache = {
+    key,
+    file,
+    text: parts.length ? `My MarvelSyllabus archive: ${parts.join(" and ")}.` : "My MarvelSyllabus ID card.",
+  };
+  return shareCardCache;
+}
+
+/** Some browsers (and every desktop without a share sheet) refuse navigator.share,
+ *  so the card is handed to the user as a download instead of failing. */
+function downloadShareCard(file: File) {
+  const url = URL.createObjectURL(file);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = file.name;
+  link.rel = "noopener";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  // Revoking straight away cancels the download in some browsers.
+  window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 async function renderProfileShareCard(snapshot: CustomerSnapshot) {
@@ -171,7 +235,8 @@ async function renderProfileShareCard(snapshot: CustomerSnapshot) {
   context.fillRect(230, 210, 740, 680);
   context.fillStyle = "#f2e6d4";
   context.font = "500 70px sans-serif";
-  context.fillText(snapshot.settings.displayName, 90, 1030);
+  const displayName = snapshot.settings.displayName?.trim() || "MarvelSyllabus Agent";
+  context.fillText(displayName.length > 22 ? `${displayName.slice(0, 21)}…` : displayName, 90, 1030);
   context.fillStyle = "#c78a64";
   context.font = "600 25px monospace";
   context.fillText("OFFICIAL PERSONNEL FILE", 93, 1085);
@@ -189,7 +254,10 @@ async function renderProfileShareCard(snapshot: CustomerSnapshot) {
   context.font = "600 20px monospace";
   if (watched !== null) context.fillText("WATCHED", 100, 1280);
   if (streak !== null) context.fillText("DAY STREAK", 395, 1280);
-  const originX = 785;
+  // With both privacy toggles off there are no numbers to print, so centre the
+  // QR instead of leaving the lower half of the card empty.
+  const hasStats = watched !== null || streak !== null;
+  const originX = hasStats ? 785 : 442;
   const originY = 1195;
   const qrSource = await QRCode.toDataURL(snapshot.settings.qrDestination ?? "https://marvelsyllabus.com", { errorCorrectionLevel: "M", margin: 1, width: 330, color: { dark: "#242120", light: "#f2e6d4" } });
   const qrImage = await loadCardImage(qrSource);
@@ -197,7 +265,13 @@ async function renderProfileShareCard(snapshot: CustomerSnapshot) {
   context.fillStyle = "#b7a79b";
   context.font = "500 20px monospace";
   context.fillText("BURDEN WITH GLORIOUS SYLLABUS", 90, 1490);
-  return new Promise<File>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(new File([blob], "marvelsyllabus-id-card.png", { type: "image/png" })) : reject(new Error("share_card_failed")), "image/png"));
+  // JPEG: the card is an opaque photo composite, and a ~200KB file encodes fast
+  // and shares to more targets than a multi-megabyte PNG.
+  return new Promise<File>((resolve, reject) => canvas.toBlob(
+    (blob) => (blob ? resolve(new File([blob], SHARE_CARD_FILE, { type: "image/jpeg" })) : reject(new Error("share_card_failed"))),
+    "image/jpeg",
+    0.92,
+  ));
 }
 
 function SwipeDots({ count, active, onChange }: { count: number; active: number; onChange: (index: number) => void }) {
@@ -358,6 +432,19 @@ function App() {
     loadPublicConfig().then(setConfig).catch(() => {});
   }, []);
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(null), 3500); return () => window.clearTimeout(timer); }, [toast]);
+  // Render the share card while the browser is idle so the share button opens
+  // the native sheet immediately, inside the click's user gesture.
+  useEffect(() => {
+    if (!snapshot) return;
+    const warm = () => { void buildShareCard(snapshot).catch(() => {}); };
+    const handle = typeof window.requestIdleCallback === "function"
+      ? window.requestIdleCallback(warm, { timeout: 3000 })
+      : window.setTimeout(warm, 1200);
+    return () => {
+      if (typeof window.cancelIdleCallback === "function") window.cancelIdleCallback(handle);
+      else window.clearTimeout(handle);
+    };
+  }, [snapshot]);
 
   const catalog = useMemo(() => sortCatalog(snapshot?.catalog ?? []), [snapshot?.catalog]);
   const activeMovieIndex = activeMovie ?? 0;
@@ -426,26 +513,27 @@ function App() {
   };
   const shareCard = async () => {
     if (!snapshot) return;
-    const watched = snapshot.settings.shareWatched ? `${snapshot.progress.length} watched moments` : "a MarvelSyllabus archive";
-    const streak = snapshot.settings.shareStreak ? ` and a ${streakLength(snapshot.progress)} day streak` : "";
-    const text = `My MarvelSyllabus archive: ${watched}${streak}.`;
     try {
-      const card = await renderProfileShareCard(snapshot);
-      const nativeNavigator = navigator as Navigator & { share?: (data: ShareData) => Promise<void>; canShare?: (data: ShareData) => boolean };
-      const shareData: ShareData = { title: "My MarvelSyllabus ID card", text, files: [card] };
-      if (typeof nativeNavigator.share === "function" && (!nativeNavigator.canShare || nativeNavigator.canShare(shareData))) {
-        await nativeNavigator.share(shareData);
-        showToast("Share sheet opened.", "success");
-        return;
+      const { file, text } = await buildShareCard(snapshot);
+      const shareTarget = navigator as Navigator & { share?: (data: ShareData) => Promise<void>; canShare?: (data: ShareData) => boolean };
+      const shareData: ShareData = { title: "My MarvelSyllabus ID card", text, files: [file] };
+      if (typeof shareTarget.share === "function" && (!shareTarget.canShare || shareTarget.canShare(shareData))) {
+        try {
+          await shareTarget.share(shareData);
+          showToast("Share sheet opened.", "success");
+          return;
+        } catch (cause) {
+          // The user closing the sheet is not a failure.
+          if (cause instanceof DOMException && cause.name === "AbortError") return;
+          downloadShareCard(file);
+          showToast("Share sheet unavailable — the card was downloaded instead.", "success");
+          return;
+        }
       }
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(card);
-      link.download = card.name;
-      link.click();
-      URL.revokeObjectURL(link.href);
+      downloadShareCard(file);
       showToast("ID card downloaded. Upload it to your social app.", "success");
     } catch {
-      showToast("Could not prepare the share card.", "danger");
+      showToast("Could not prepare the share card. Try again.", "danger");
     }
   };
 
